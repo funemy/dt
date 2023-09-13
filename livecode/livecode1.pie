@@ -67,8 +67,17 @@
                  ((ExactlyP Atom) 'true)
                  ((ExactlyP Atom) 'false)))
 
+(claim BoolPPP U)
+(define BoolPPP (Either
+                 ((ExactlyP Nat) 0)
+                 ((ExactlyP Nat) 1)))
+
+
 (claim truepp BoolPP)
 (define truepp (left (cons 'true (same 'true))))
+
+(claim trueppp BoolPPP)
+(define trueppp (left (cons 0 (same 0))))
 
 
 (claim Atom/Nat U)
