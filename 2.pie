@@ -163,6 +163,7 @@
 ;; (-> Nat
 ;;   Nat)
 
+;; I don't understand the hint
 (claim max
   (-> Nat Nat
     Nat))
@@ -289,12 +290,34 @@
 (claim fib
   (-> Nat
     Nat))
-#;(check-same Nat (fib 0) 1)
-#;(check-same Nat (fib 1) 1)
-#;(check-same Nat (fib 2) 2)
-#;(check-same Nat (fib 3) 3)
-#;(check-same Nat (fib 4) 5)
-#;(check-same Nat (fib 5) 8)
+
+(claim fib/init-pair (Pair Nat Nat))
+(define fib/init-pair (cons 1 1))
+
+
+(claim fib/aux
+  (-> Nat
+      (Pair Nat Nat)))
+
+(define fib/aux
+  (lambda (n)
+    (which-Nat n
+               fib/init-pair
+               (lambda (n-1) (iter-Nat n-1
+                                       fib/init-pair
+                                       (lambda (p) (cons (+ (car p) (cdr p)) (car p))))))))
+
+(define fib
+  (lambda (n) (car (fib/aux n))))
+
+(check-same Nat (fib 0) 1)
+(check-same Nat (fib 1) 1)
+(check-same Nat (fib 2) 2)
+(check-same Nat (fib 3) 3)
+(check-same Nat (fib 4) 5)
+(check-same Nat (fib 5) 8)
+(check-same Nat (fib 6) 13)
+(check-same Nat (fib 7) 21)
 
 ;;;; Implement Ackermann's function
 ;;; (ack n m) is:
@@ -323,6 +346,16 @@
 (claim ack
   (-> Nat Nat
     Nat))
+
+;; (define ack
+;;   (lambda (n m)
+;;     (which-Nat n
+;;                (add1 m)
+;;                (lambda (n-1)
+;;                  (which-Nat m
+;;                             (ack n-1 1)
+;;                             (lambda (m-1) (ack n-1 (ack n m-1))))))))
+
 #;(check-same Nat (ack 0 0) 1)
 #;(check-same Nat (ack 1 0) 2)
 #;(check-same Nat (ack 2 0) 3)
