@@ -49,11 +49,69 @@
 (claim truep BoolP)
 (define truep (left (cons 'true (same 'true))))
 
+
 ; Can we abstract Exactly over Atom?
 ; It would need to look like...
 ; (claim f (-> U U))
 ; (define f (lambda (x) (-> x U)))
 ; but this doesn't type check
-;
+
 ; (claim ExactlyP )
 ; (define ExactlyP (lambda (y) (Sigma ((x Atom)) (= Atom x y))))
+
+(claim ExactlyP (Pi ((t U)) (-> t U)))
+(define ExactlyP (lambda (t) (lambda (y) (Sigma ((x t)) (= t x y)))))
+
+(claim BoolPP U)
+(define BoolPP (Either
+                 ((ExactlyP Atom) 'true)
+                 ((ExactlyP Atom) 'false)))
+
+(claim truepp BoolPP)
+(define truepp (left (cons 'true (same 'true))))
+
+
+(claim Atom/Nat U)
+(define Atom/Nat (Either Atom Nat))
+
+(claim exactly (-> Atom/Nat U))
+(define exactly (lambda (y) (Sigma ((x Atom/Nat)) (= Atom/Nat x y))))
+
+(claim Type5 U) ; a type whose only inhabitant is natural number 5
+(define Type5 (exactly (right 5)))
+
+(claim val/Type5 Type5)
+(define val/Type5 (cons (right 5) (same (right 5))))
+
+(claim TypeTrue U) ; a type whose only inhabitant is atom 'true'
+(define TypeTrue (exactly (left 'true)))
+
+(claim val/TypeTrue TypeTrue)
+(define val/TypeTrue (cons (left 'true) (same (left 'true))))
+
+; The universe of base types
+; Atom / Nat / Trival (Unit)
+(claim U0 U)
+(define U0 (Either Atom (Either Nat Trivial)))
+
+; helper functions
+; a set of ctors that promote value of base types to BaseTy
+(claim atom (-> Atom U0))
+(define atom
+  (lambda (x) (left x)))
+
+(claim nat (-> Nat U0))
+(define nat
+  (lambda (x) (right (left x))))
+
+(claim unit (-> Trivial U0))
+(define unit
+  (lambda (x) (right (right x))))
+
+(claim XList
+       (-> U U))
+
+(define XList (lambda (x) (List x)))
+
+(claim NatList U)
+(define NatList (XList Nat))
