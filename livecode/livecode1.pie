@@ -1,0 +1,59 @@
+#lang pie
+
+(the Nat 5)
+5
+
+(claim x Nat)
+(define x 5)
+
+(claim y Nat)
+(define y (add1 6))
+
+(claim z Nat)
+(define z (add1 (the Nat 6)))
+
+;(claim a Nat)
+;(define a 'true)
+
+(claim PairOfAtom U)
+(define PairOfAtom (Pair Atom Atom))
+
+(claim foobar (Pair Atom Atom)) ;PairOfAtom))
+(define foobar (cons 'foo 'bar))
+
+(claim Bool U)
+(define Bool (Either
+               (Sigma ((x Atom)) (= Atom x 'true)) ; 'true
+               (Sigma ((x Atom)) (= Atom x 'false)))) ; 'false
+
+(claim true Bool)
+(define true (left (cons 'true (same 'true))))
+
+(claim Exactly (-> Atom U))
+(define Exactly (lambda (y) (Sigma ((x Atom)) (= Atom x y))))
+
+(claim add5 (-> Nat Nat))
+(define add5 (lambda (x) (add1 (add1 (add1 (add1 (add1 x)))))))
+
+(claim BadBool U)
+(define BadBool (Either Atom Atom))
+
+(claim badbool1 BadBool)
+(define badbool1 (left 'foo))
+
+(claim BoolP U)
+(define BoolP (Either
+                (Exactly 'true)
+                (Exactly 'false)))
+
+(claim truep BoolP)
+(define truep (left (cons 'true (same 'true))))
+
+; Can we abstract Exactly over Atom?
+; It would need to look like...
+; (claim f (-> U U))
+; (define f (lambda (x) (-> x U)))
+; but this doesn't type check
+;
+; (claim ExactlyP )
+; (define ExactlyP (lambda (y) (Sigma ((x Atom)) (= Atom x y))))
