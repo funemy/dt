@@ -163,11 +163,11 @@
 ;; (-> Nat
 ;;   Nat)
 
-;; I don't understand the hint
 (claim max
   (-> Nat Nat
     Nat))
 
+;; monus, I didn't know it would be asked when I reached here
 (claim sub
   (-> Nat Nat
     Nat))
@@ -184,6 +184,8 @@
 (define const/nat
   (lambda (x _) x))
 
+;; This solution clearly works, but I don't understand the hint above,
+;; the base case is clearly not a function of (-> Nat Nat)
 (define max
   (lambda (n m)
     (which-Nat
@@ -191,11 +193,37 @@
       m
       (const/nat n))))
 
+
 (check-same Nat (max 3 5) 5)
 (check-same Nat (max 4 2) 4)
 (check-same Nat (max 5 3) 5)
 (check-same Nat (max 0 42) 42)
 (check-same Nat (max 5 5) 5)
+
+;; an alternative solution based on the hint given
+(claim max2
+  (-> Nat Nat Nat))
+
+(define max2
+  (lambda (n)
+    (iter-Nat n
+              id/nat ; now the base case is a function of Nat -> Nat, the identity function intuitively says "forall m : Nat . (max 0 m) == m"
+              (lambda (f) ; f : Nat -> Nat, intuitively, (f m) returns the larger number between n-1 and m (for any given m).
+                (lambda (m) ; m : Nat
+                  (add1 (f (sub1 m)))))))) ; intuitively, this implementation says that the largest number between n and m must be the larger number between n-1 and m-1 plus one
+
+;; the alternative impl above is equivalent to pseudo code below:
+;; max : Nat -> Nat -> Nat
+;; max zero m = m
+;; max (suc n) m = suc (max n (pred m))
+;;
+;; note the second case above, the (max n) on the RHS correspond to the `f` in our max2
+
+(check-same Nat (max2 3 5) 5)
+(check-same Nat (max2 4 2) 4)
+(check-same Nat (max2 5 3) 5)
+(check-same Nat (max2 0 42) 42)
+(check-same Nat (max2 5 5) 5)
 
 ;; Problem 6
 ;; (min n m) evaluates to whichever of n or m is smallest.
