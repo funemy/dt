@@ -96,9 +96,9 @@
   (-> (Pair Nat (Pair Nat (Pair Nat Nat)))
     (Pair (Pair Nat Nat) (Pair Nat Nat))))
 (define left-rebalance
-  (lambda (p) 
-    (cons 
-      (cons (car p) (car (cdr p))) 
+  (lambda (p)
+    (cons
+      (cons (car p) (car (cdr p)))
       (cdr (cdr p)))))
 
 ;; Please uncomment this test prior to submission
@@ -129,7 +129,7 @@
 (define kar-of-Nats
   (lambda (p)
     (with-Nats
-      (lambda (n1 n2) n1)
+      (lambda (n1 _) n1)
       p)))
 
 ;; Please uncomment this test prior to submission
@@ -146,7 +146,7 @@
 (define kdr-of-Nats
   (lambda (p)
     (with-Nats
-      (lambda (n1 n2) n2)
+      (lambda (_ n2) n2)
       p)))
 
 ;; Please uncomment this test prior to submission
@@ -163,8 +163,8 @@
   (-> Nat
     Atom))
 (define add1p
-  (lambda (n) 
-    (which-Nat n 'nil (lambda (prev) 't))))
+  (lambda (n)
+    (which-Nat n 'nil (lambda (_) 't))))
 
 ;; Please uncomment these tests prior to submission
 (check-same Atom (add1p 0) 'nil)
@@ -188,7 +188,7 @@
 (define first-non-zero
   (lambda (p)
     (with-Nats
-      (lambda (n1 n2) (which-Nat n1 n2 (lambda (prev) n1)))
+      (lambda (n1 n2) (which-Nat n1 n2 (lambda (_) n1)))
       p)))
 
 ;; Please uncomment these tests prior to submission
