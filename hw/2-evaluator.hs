@@ -51,26 +51,29 @@ lookupVar (Env ((y, val) : env)) x
 
 eval :: Env -> Expr -> Either Message Value
 eval env (Var x) = lookupVar env x
-eval env (App rator rand) =
-  case rator of
-    Lambda x body -> return (Closure env x body)
-    _ -> failure "Applying a non-lambda expression."
+eval env (App rator rand) = do
+  ratorV <- eval env rator
+  randV <- eval env rand
+  doApply ratorV randV
 eval env (Lambda x body) =
-  error "TODO"
+  return (Closure env x body)
 eval env (CstI i) =
-  error "TODO"
-eval env (Plus e1 e2) =
-  error "TODO"
+  return (IntegerVal i)
+eval env (Plus e1 e2) = do
+  e1V <- eval env e1
+  e2V <- eval env e2
+  doPlus e1V e2V
 
 doApply :: Value -> Value -> Either Message Value
 doApply (Closure env x body) arg =
-  error "TODO"
+  let env' = extend env x arg
+   in eval env' body
 doApply notFun arg =
   failure ("Not fun: " ++ show notFun)
 
 doPlus :: Value -> Value -> Either Message Value
 doPlus (IntegerVal i1) (IntegerVal i2) =
-  error "TODO"
+  return $ IntegerVal (i1 + i2)
 doPlus other1 other2 =
   failure
     ( "One of these is not an integer: "
