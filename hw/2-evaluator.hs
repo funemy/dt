@@ -46,13 +46,15 @@ failure msg = Left (Message msg)
 lookupVar :: Env -> Name -> Either Message Value
 lookupVar (Env []) x = failure ("Unbound: " ++ show x)
 lookupVar (Env ((y, val) : env)) x
-  | x == y = Right val
+  | x == y = return val
   | otherwise = lookupVar (Env env) x
 
 eval :: Env -> Expr -> Either Message Value
 eval env (Var x) = lookupVar env x
 eval env (App rator rand) =
-  error "TODO"
+  case rator of
+    Lambda x body -> return (Closure env x body)
+    _ -> failure "Applying a non-lambda expression."
 eval env (Lambda x body) =
   error "TODO"
 eval env (CstI i) =
@@ -87,10 +89,14 @@ alphaEquiv e1 e2 = helper 0 [] e1 [] e2
       (Just n, Just m) -> n == m
       _ -> False
   helper i xs (App f1 a1) ys (App f2 a2) =
-    error "TODO"
+    helper i xs f1 ys f2 && helper i xs a1 ys a2
   helper i xs (Lambda x e1) ys (Lambda y e2) =
-    error "TODO"
-  helper _ _ _ _ _ = False
+    let xs' = (x, i) : xs
+        ys' = (y, i) : ys
+     in helper (i + 1) xs' e1 ys' e2
+  helper i xs (CstI x) ys (CstI y) = x == y
+  helper i xs (Plus e11 e12) ys (Plus e21 e22) =
+    helper i xs e11 ys e21 && helper i xs e12 ys e22
 
 ---------------------------------------
 -- Test code begins here.
@@ -109,66 +115,58 @@ define env x e =
 -- that 3 is λ f . λ x . f (f (f x)).
 --
 -- Due to shadowing, Church numerals are a nice way to test evaluators.
-defineChurchNums :: Env -> Either Message Env
-defineChurchNums env =
-  do
-    env1 <-
-      define
-        env
-        (Name "zero")
+
+-- church numeral zero
+-- \f \x . x
+churchZero :: Expr
+churchZero = Lambda (Name "f") (Lambda (Name "x") (Var (Name "x")))
+
+-- church numeral succ
+-- \n \f \x . f (n f x)
+churchSucc :: Expr
+churchSucc =
+  Lambda
+    (Name "n")
+    ( Lambda
+        (Name "f")
+        ( Lambda
+            (Name "x")
+            (App (Var (Name "f")) (App (App (Var (Name "n")) (Var (Name "f"))) (Var (Name "x"))))
+        )
+    )
+
+-- church numeral addition
+-- \j \k \f \x . j f (k f x)
+churchAdd :: Expr
+churchAdd =
+  Lambda
+    (Name "j")
+    ( Lambda
+        (Name "k")
         ( Lambda
             (Name "f")
             ( Lambda
                 (Name "x")
-                (Var (Name "x"))
-            )
-        )
-    env2 <-
-      define
-        env1
-        (Name "add1")
-        ( Lambda
-            (Name "n")
-            ( Lambda
-                (Name "f")
-                ( Lambda
-                    (Name "x")
+                ( App
+                    (App (Var (Name "j")) (Var (Name "f")))
                     ( App
-                        (Var (Name "f"))
-                        ( App
-                            (App (Var (Name "n")) (Var (Name "f")))
-                            (Var (Name "x"))
-                        )
-                    )
-                )
-            )
-        )
-    return env2
-
-defineChurchAdd :: Env -> Either Message Env
-defineChurchAdd env =
-  define
-    env
-    (Name "+")
-    ( Lambda
-        (Name "j")
-        ( Lambda
-            (Name "k")
-            ( Lambda
-                (Name "f")
-                ( Lambda
-                    (Name "x")
-                    ( App
-                        (App (Var (Name "j")) (Var (Name "f")))
-                        ( App
-                            (App (Var (Name "k")) (Var (Name "f")))
-                            (Var (Name "x"))
-                        )
+                        (App (Var (Name "k")) (Var (Name "f")))
+                        (Var (Name "x"))
                     )
                 )
             )
         )
     )
+
+defineChurchNums :: Env -> Either Message Env
+defineChurchNums env =
+  do
+    env1 <-
+      define env (Name "zero") churchZero
+    define env1 (Name "add1") churchSucc
+
+defineChurchAdd :: Env -> Either Message Env
+defineChurchAdd env = define env (Name "+") churchAdd
 
 toChurch :: Integer -> Expr
 toChurch n
@@ -198,7 +196,7 @@ testTrue name b = testBoolIs name b True
 testFalse name b = testBoolIs name b False
 
 noSetup :: Env -> Either Message Env
-noSetup env = Right env
+noSetup = return
 
 main :: IO ()
 main =
