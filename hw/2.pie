@@ -206,11 +206,12 @@
 
 (define max2
   (lambda (n)
-    (iter-Nat n
-              id/nat ; now the base case is a function of Nat -> Nat, the identity function intuitively says "forall m : Nat . (max 0 m) == m"
-              (lambda (f) ; f : Nat -> Nat, intuitively, (f m) returns the larger number between n-1 and m (for any given m).
-                (lambda (m) ; m : Nat
-                  (add1 (f (sub1 m)))))))) ; intuitively, this implementation says that the largest number between n and m must be the larger number between n-1 and m-1 plus one
+    (iter-Nat
+      n
+      id/nat ; now the base case is a function of Nat -> Nat, the identity function intuitively says "forall m : Nat . (max 0 m) == m"
+      (lambda (f) ; f : Nat -> Nat, intuitively, (f m) returns the larger number between n-1 and m (for any given m).
+        (lambda (m) ; m : Nat
+          (add1 (f (sub1 m)))))))) ; intuitively, this implementation says that the largest number between n and m must be the larger number between n-1 and m-1 plus one
 
 ;; the alternative impl above is equivalent to pseudo code below:
 ;; max : Nat -> Nat -> Nat
@@ -329,11 +330,14 @@
 
 (define fib/aux
   (lambda (n)
-    (which-Nat n
-               fib/init-pair
-               (lambda (n-1) (iter-Nat n-1
-                                       fib/init-pair
-                                       (lambda (p) (cons (+ (car p) (cdr p)) (car p))))))))
+    (which-Nat
+      n
+      fib/init-pair
+      (lambda (n-1)
+        (iter-Nat
+          n-1
+          fib/init-pair
+          (lambda (p) (cons (+ (car p) (cdr p)) (car p))))))))
 
 (define fib
   (lambda (n) (car (fib/aux n))))
@@ -375,14 +379,28 @@
   (-> Nat Nat
     Nat))
 
+(claim ack/0m
+  (-> Nat Nat))
+
+(define ack/0m
+  (lambda (m) (add1 m)))
+
 ;; (define ack
-;;   (lambda (n m)
-;;     (which-Nat n
-;;                (add1 m)
-;;                (lambda (n-1)
-;;                  (which-Nat m
-;;                             (ack n-1 1)
-;;                             (lambda (m-1) (ack n-1 (ack n m-1))))))))
+;;   (lambda (n)
+;;     (rec-Nat
+;;       n
+;;       ack/0m
+;;       (lambda (n-1 f) ; f is (lambda (m) (ack n-1 m))
+;;         (lambda (m)
+;;           (rec-Nat
+;;             m
+;;             (f 1)
+;;             (lambda (m-1)
+;;               (f (ack n m-1))))))))) ;; this line requires (ack n), but it seems impossible to construct
+
+;; Ackermann function is not a primitive recursive function.
+;; So this problem is impossible?
+
 
 #;(check-same Nat (ack 0 0) 1)
 #;(check-same Nat (ack 1 0) 2)
