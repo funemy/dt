@@ -1,0 +1,20 @@
+#lang pie
+
+(the Nat 2)
+
+2
+
+(check-same Nat 2 (the Nat 2))
+
+;; Chapter 3 has a digression about this. page 66
+;; the has a value, but is not a value, so is not a normal form.
+
+(the U (Pair Nat Nat))
+
+(Pair U U)
+
+;(the U (cons Nat Nat))
+(the (Pair U U) (cons Nat Nat))
+(the (Pair Nat Nat) (cons 5 6))
+
+;; (the (Pair U U) (cons U U)) ill-typed since U is not a U
