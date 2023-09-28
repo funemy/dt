@@ -385,37 +385,34 @@
 (define ack/0m
   (lambda (m) (add1 m)))
 
-;; (define ack
-;;   (lambda (n)
-;;     (rec-Nat
-;;       n
-;;       ack/0m
-;;       (lambda (n-1 f) ; f is (lambda (m) (ack n-1 m))
-;;         (lambda (m)
-;;           (rec-Nat
-;;             m
-;;             (f 1)
-;;             (lambda (m-1)
-;;               (f (ack n m-1))))))))) ;; this line requires (ack n), but it seems impossible to construct
-
-;; Ackermann function is not a primitive recursive function.
-;; So this problem is impossible?
+(define ack
+  (lambda (n)
+    (rec-Nat
+      n
+      ack/0m
+      (lambda (n-1 f) ; f is (lambda (m) (ack n-1 m))
+        (lambda (m)
+          (rec-Nat
+            m
+            (f 1)
+            (lambda (m-1 g) ; g is (ack n m-1)
+              (f g))))))))
 
 
-#;(check-same Nat (ack 0 0) 1)
-#;(check-same Nat (ack 1 0) 2)
-#;(check-same Nat (ack 2 0) 3)
-#;(check-same Nat (ack 3 0) 5)
-#;(check-same Nat (ack 4 0) 13)
-#;(check-same Nat (ack 0 1) 2)
-#;(check-same Nat (ack 1 1) 3)
-#;(check-same Nat (ack 2 1) 5)
-#;(check-same Nat (ack 3 1) 13)
-#;(check-same Nat (ack 0 2) 3)
-#;(check-same Nat (ack 1 2) 4)
-#;(check-same Nat (ack 2 2) 7)
-#;(check-same Nat (ack 3 2) 29)
-#;(check-same Nat (ack 0 3) 4)
-#;(check-same Nat (ack 1 3) 5)
-#;(check-same Nat (ack 2 3) 9)
-#;(check-same Nat (ack 3 3) 61)
+(check-same Nat (ack 0 0) 1)
+(check-same Nat (ack 1 0) 2)
+(check-same Nat (ack 2 0) 3)
+(check-same Nat (ack 3 0) 5)
+(check-same Nat (ack 4 0) 13)
+(check-same Nat (ack 0 1) 2)
+(check-same Nat (ack 1 1) 3)
+(check-same Nat (ack 2 1) 5)
+(check-same Nat (ack 3 1) 13)
+(check-same Nat (ack 0 2) 3)
+(check-same Nat (ack 1 2) 4)
+(check-same Nat (ack 2 2) 7)
+(check-same Nat (ack 3 2) 29)
+(check-same Nat (ack 0 3) 4)
+(check-same Nat (ack 1 3) 5)
+(check-same Nat (ack 2 3) 9)
+(check-same Nat (ack 3 3) 61)
