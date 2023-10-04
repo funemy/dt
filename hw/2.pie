@@ -387,7 +387,7 @@
 
 (define ack
   (lambda (n)
-    (rec-Nat
+    (rec-Nat ; paramorphism
       n
       ack/0m
       (lambda (n-1 f) ; f is (lambda (m) (ack n-1 m))
