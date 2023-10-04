@@ -88,4 +88,7 @@ test2 = refl
 -- Let's define append from your eliminator
 
 append : {E : U} -> List E -> E -> List E
-append l e = elim-List l {!!} ?
+append l e = elim-List l (λ hd tl acc -> lcons hd acc) (lcons e nil)
+
+test3 : append (lcons (add1 zero) nil) zero ≡ (lcons (add1 zero) (lcons zero nil))
+test3 = refl
