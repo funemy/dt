@@ -1,7 +1,7 @@
 #lang pie
 
 ;; In part I, for each claim, write a definition that Pie
-;; accepts. 
+;; accepts.
 ;;
 ;; In part II, some tasks do not have claims. For these tasks, please
 ;; write a suitable type as a claim, and then write the
@@ -31,6 +31,15 @@
     (→ (Pair A (Pair B C))
       A)))
 
+(define first-of-three
+  (lambda (_ _ _ p)
+    (car p)))
+
+(check-same
+  Atom
+  (first-of-three Atom Atom Atom (cons 'foo (cons'bar 'baz)))
+  'foo)
+
 ;; 1.
 (claim second-of-three
   (Π ((A U)
@@ -38,6 +47,15 @@
       (C U))
     (→ (Pair A (Pair B C))
       B)))
+
+(define second-of-three
+  (lambda (_ _ _ p)
+    (car (cdr p))))
+
+(check-same
+  Atom
+  (second-of-three Atom Atom Atom (cons 'foo (cons'bar 'baz)))
+  'bar)
 
 ;; 2.
 (claim third-of-three
@@ -47,6 +65,15 @@
     (→ (Pair A (Pair B C))
       C)))
 
+(define third-of-three
+  (lambda (_ _ _ p)
+    (cdr (cdr p))))
+
+(check-same
+  Atom
+  (third-of-three Atom Atom Atom (cons 'foo (cons'bar 'baz)))
+  'baz)
+
 ;; 3.
 (claim left-rebalance
   (Π ((A U)
@@ -55,6 +82,18 @@
       (D U))
     (→ (Pair A (Pair B (Pair C D)))
       (Pair (Pair A B) (Pair C D)))))
+
+(define left-rebalance
+  (lambda (_ _ _ _ p)
+    (cons
+      (cons (car p) (car (cdr p)))
+      (cdr (cdr p)))))
+
+(check-same
+  (Pair (Pair Atom Atom) (Pair Atom Atom))
+  (left-rebalance Atom Atom Atom Atom
+                  (cons 'one (cons 'two (cons 'three 'four))))
+  (cons (cons 'one 'two) (cons 'three 'four)))
 
 ;; 4.
 (claim change-pair
@@ -66,6 +105,22 @@
       (→ B D)
       (Pair A B)
      (Pair C D))))
+
+(define change-pair
+  (lambda (_ _ _ _ f g p)
+    (cons
+      (f (car p))
+      (g (cdr p)))))
+
+(check-same
+  (Pair Nat Nat)
+  (change-pair
+    Atom Atom Nat Nat
+    (lambda (_) 1)
+    (lambda (_) 2)
+    (cons 'foo 'bar))
+  (cons 1 2))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Part II
