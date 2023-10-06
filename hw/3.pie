@@ -338,7 +338,7 @@
   (lambda (l)
     (rec-List
       l
-      (the (Either Atom Nat)(left 'empty))
+      (the (Either Atom Nat) (left 'empty))
       (lambda (e es x)
         (ind-Either
           x
@@ -474,6 +474,8 @@
       e
       (lambda (x) (f x)))))
 
+;; this implementation might be confusing,
+;; an alternative way (which might be easier to understand) is to define `sonc` and `reverse` for list
 (claim iterations
   (Π ((E U))
     (→ Nat (→ E E) E

@@ -28,6 +28,51 @@
         0
         (+ 2))))
 
+;; identity function
+(claim id
+  (Π ((X U))
+   (-> X X)))
+
+(define id
+  (lambda (_ n) n))
+
+;; const function
+(claim const
+  (Π ((X U))
+    (-> X X
+    X)))
+
+(define const
+  (lambda (_ x _) x))
+
+(claim sub1
+  (-> Nat
+    Nat))
+
+(define sub1
+  (lambda (n)
+    (which-Nat n 0 (id Nat))))
+
+;; monus implementation from assignment 2
+(claim monus
+  (-> Nat Nat
+    Nat))
+
+(define monus
+  (lambda (n m)
+    (iter-Nat m n sub1)))
+
+;; min implementation from assignment 2
+(claim min
+  (-> Nat Nat
+    Nat))
+
+(define min
+  (lambda (n m)
+    (which-Nat
+      (monus n m)
+      n
+      (const Nat m))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The assignment
@@ -42,14 +87,23 @@
     (-> E
       (Vec E how-many))))
 
-#;
+(define replicate
+  (lambda (E n e)
+    (ind-Nat
+      n
+      (lambda (k) (Vec E k))
+      vecnil
+      (lambda (n-1 vec)
+          (vec:: e vec)))))
+
+
 (check-same (Vec Atom 4)
   (replicate Atom 4 'champignon)
   (vec:: 'champignon
     (vec:: 'champignon
       (vec:: 'champignon
         (vec:: 'champignon vecnil)))))
-#;
+
 (check-same (Vec (List Nat) 2)
   (replicate (List Nat) 2 (:: 1 (:: 2 nil)))
   (vec:: (:: 1
@@ -60,14 +114,35 @@
 
 ;; 2. Select a name and write a claim and a definition for a function
 ;;    that finds the smallest entry in a non-empty Vec of Nats.
-#;
+(claim min/vec
+  (Π ((n Nat))
+     (-> (Vec Nat n)
+         Nat)))
+
+(define min/vec
+  (lambda (n v)
+    (ind-Vec
+      n v
+      (lambda (_ _) Nat)
+      0
+      (lambda (k e es s)
+        (which-Nat
+          k
+          e
+          (lambda (_) (min s e)))))))
+
 (check-same Nat
-  (YOUR-NAME-HERE 3
+  (min/vec 4
     (vec:: 5 (vec:: 2 (vec:: 4 (vec:: 3 vecnil)))))
   2)
-#;
+
 (check-same Nat
-  (YOUR-NAME-HERE 3
+  (min/vec 4
+    (vec:: 5 (vec:: 2 (vec:: 1 (vec:: 3 vecnil)))))
+  1)
+
+(check-same Nat
+  (min/vec 4
     (vec:: 5 (vec:: 2 (vec:: 4 (vec:: 0 vecnil)))))
   0)
 
@@ -81,6 +156,15 @@
         (Vec A n)
       (Vec B n))))
 
+(define map-Vec
+  (lambda (A B n f v)
+    (ind-Vec
+      n v
+      (lambda (k _) (Vec B k))
+      (the (Vec B zero) vecnil)
+      (lambda (k e es vp)
+        (vec:: (f e) vp)))))
+
 ;; 4. zip-with-Vec combines two Vecs, one entry at a time, using some function.
 (claim zip-with-Vec
   (Π ((A U)
@@ -93,7 +177,18 @@
         (Vec B n)
       (Vec C n))))
 
-#;
+(define zip-with-Vec
+  (lambda (A B C n f va)
+    (ind-Vec
+      n va
+      (lambda (k _) (-> (Vec B k) (Vec C k)))
+      (lambda (vb) (the (Vec C zero) vecnil))
+      (lambda (ka ea eas h)
+        (lambda (vb) ;; vb : Vec B ka
+          (vec::
+            (f ea (head vb))
+            (h (tail vb))))))))
+
 (check-same (Vec (Pair Nat Atom) 2)
   (vec:: (cons 2 'chicken-of-the-woods)
     (vec:: (cons 22 'hen-of-woods) vecnil))
@@ -111,14 +206,22 @@
       (n Nat))
     (-> (Vec E n) E
       (Vec E (add1 n)))))
-#;
+
+(define snoc-Vec
+  (lambda (E n v e)
+    (ind-Vec
+      n v
+      (lambda (k _) (Vec E (+ 1 k)))
+      (vec:: e vecnil)
+      (lambda (k e es vp)
+        (vec:: e vp)))))
+
 (check-same (Vec Atom 2)
   (vec:: 'pea
     (vec:: 'carrot vecnil))
   (snoc-Vec Atom 1
     (vec:: 'pea vecnil)
     'carrot))
-
 
 ;; 6. vec->list computes a List with the same entries in the same order as a Vec
 (claim vec->list
@@ -127,7 +230,15 @@
     (-> (Vec E n)
       (List E))))
 
-#;
+(define vec->list
+  (lambda (E n v)
+    (ind-Vec
+      n v
+      (lambda (_ _) (List E))
+      nil
+      (lambda (k e es l)
+        (:: e l)))))
+
 (check-same (List Atom)
   (vec->list Atom 2
     (vec:: 'flour
@@ -135,7 +246,6 @@
   (:: 'flour
     (:: 'shortening nil)))
 
-#;
 (check-same (List Nat)
   (vec->list Nat 3 (vec:: 7 (vec:: 9 (vec:: 13 vecnil))))
   (:: 7 (:: 9 (:: 13 nil))))
@@ -148,7 +258,16 @@
     (-> (Vec E n)
       (Vec E n))))
 
-#;
+;; using snoc-Vec to insert the element to the back of the vec at each iteration
+(define reverse-Vec
+  (lambda (E n v)
+    (ind-Vec
+      n v
+      (lambda (k _) (Vec E k))
+      vecnil
+      (lambda (k e es vp)
+        (snoc-Vec E k vp e)))))
+
 (check-same (Vec Atom 3)
   (vec:: 'porcini
     (vec:: 'crimini
@@ -165,7 +284,17 @@
     (-> (Vec E n)
       (Vec E (double n)))))
 
-#;
+(define doubles
+  (lambda (E n v)
+    (ind-Vec
+      n v
+      (lambda (k _) (Vec E (double k)))
+      vecnil
+      (lambda (k e es vp)
+        (vec:: e
+          (vec:: e
+            vp))))))
+
 (check-same (Vec Atom 4)
   (doubles Atom 2
     (vec:: 'chantrelle
