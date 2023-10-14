@@ -141,23 +141,30 @@ freshen used x
     addTick (Name y) = Name (y ++ "'")
 
 readBackValue :: [Name] -> Value -> Norm Expr
-readBackValue used v@(VClosure _ x _) =
-    do
-        let y = freshen used x
-        body <- doApply v (Neutral (NVar y))
-        bodyExpr <- readBackValue (y : used) body
-        return (Lambda y bodyExpr)
-readBackValue used (VInt i) = return (CstI i)
-readBackValue used v@(Neutral ne) =
-    readBackNeutral used ne
+readBackValue used v@(VClosure _ x _) = do
+    let y = freshen used x
+    body <- doApply v (Neutral (NVar y))
+    bodyExpr <- readBackValue (y : used) body
+    return (Lambda y bodyExpr)
+readBackValue _ (VInt i) = return (CstI i)
+readBackValue used (Neutral ne) = readBackNeutral used ne
+readBackValue used (VCons vfst vsnd) = do
+    fst <- readBackValue used vfst
+    snd <- readBackValue used vsnd
+    return (Cons fst snd)
 
 readBackNeutral :: [Name] -> Neutral -> Norm Expr
-readBackNeutral used (NVar x) = return (Var x)
-readBackNeutral used (NApp ne v) =
-    do
-        rator <- readBackNeutral used ne
-        rand <- readBackValue used v
-        return (App rator rand)
+readBackNeutral _ (NVar x) = return (Var x)
+readBackNeutral used (NApp ne v) = do
+    rator <- readBackNeutral used ne
+    rand <- readBackValue used v
+    return (App rator rand)
+readBackNeutral used (NCar ne) = do
+    e <- readBackNeutral used ne
+    return (Car e)
+readBackNeutral used (NCdr ne) = do
+    e <- readBackNeutral used ne
+    return (Cdr e)
 
 alphaEquiv :: Expr -> Expr -> Bool
 alphaEquiv e1 e2 = helper 0 [] e1 [] e2
@@ -171,7 +178,13 @@ alphaEquiv e1 e2 = helper 0 [] e1 [] e2
         helper i xs f1 ys f2 && helper i xs a1 ys a2
     helper i xs (Lambda x e1) ys (Lambda y e2) =
         helper (i + 1) ((x, i) : xs) e1 ((y, i) : ys) e2
-    helper i _ (CstI n) _ (CstI m) = n == m
+    helper _ _ (CstI n) _ (CstI m) = n == m
+    helper i xs (Cons fst1 snd1) ys (Cons fst2 snd2) =
+        helper i xs fst1 ys fst2 && helper i xs snd1 ys snd2
+    helper i xs (Car n) ys (Car m) =
+        helper i xs n ys m
+    helper i xs (Cdr n) ys (Cdr m) =
+        helper i xs n ys m
     helper _ _ _ _ _ = False
 
 ---------------------------------------
@@ -193,40 +206,37 @@ define env x e =
 -- Due to shadowing, Church numerals are a nice way to test normalizers.
 
 defineChurchNums :: Env -> Norm Env
-defineChurchNums env =
-    do
-        env1 <-
-            define
-                env
-                (Name "zero")
+defineChurchNums env = do
+    env1 <-
+        define
+            env
+            (Name "zero")
+            ( Lambda
+                (Name "f")
                 ( Lambda
-                    (Name "f")
-                    ( Lambda
-                        (Name "x")
-                        (Var (Name "x"))
-                    )
+                    (Name "x")
+                    (Var (Name "x"))
                 )
-        env2 <-
-            define
-                env1
-                (Name "add1")
+            )
+    define
+        env1
+        (Name "add1")
+        ( Lambda
+            (Name "n")
+            ( Lambda
+                (Name "f")
                 ( Lambda
-                    (Name "n")
-                    ( Lambda
-                        (Name "f")
-                        ( Lambda
-                            (Name "x")
-                            ( App
-                                (Var (Name "f"))
-                                ( App
-                                    (App (Var (Name "n")) (Var (Name "f")))
-                                    (Var (Name "x"))
-                                )
-                            )
+                    (Name "x")
+                    ( App
+                        (Var (Name "f"))
+                        ( App
+                            (App (Var (Name "n")) (Var (Name "f")))
+                            (Var (Name "x"))
                         )
                     )
                 )
-        return env2
+            )
+        )
 
 defineChurchAdd :: Env -> Norm Env
 defineChurchAdd env =
@@ -265,19 +275,18 @@ testNormIs ::
     Expr ->
     Expr ->
     IO ()
-testNormIs name setup expr wanted =
-    do
-        putStr (name ++ ": ")
-        case setup initEnv of
-            Left (Message err) -> error err
-            Right env ->
-                case normalize env expr of
-                    Left (Message err) -> error err
-                    Right norm
-                        | norm `alphaEquiv` wanted ->
-                            putStrLn "Success"
-                        | otherwise ->
-                            putStrLn "Failed"
+testNormIs name setup expr wanted = do
+    putStr (name ++ ": ")
+    case setup initEnv of
+        Left (Message err) -> error err
+        Right env ->
+            case normalize env expr of
+                Left (Message err) -> error err
+                Right norm
+                    | norm `alphaEquiv` wanted ->
+                        putStrLn "Success"
+                    | otherwise ->
+                        putStrLn "Failed"
 
 testBoolIs name b wanted =
     do
@@ -294,69 +303,70 @@ noSetup :: Env -> Norm Env
 noSetup env = Right env
 
 main :: IO ()
-main =
-    do
-        testNormIs
-            "identity"
-            noSetup
-            (Lambda (Name "x") (Var (Name "x")))
-            (Lambda (Name "x") (Var (Name "x")))
-        testNormIs
-            "shadowing"
-            noSetup
+main = do
+    testNormIs
+        "identity"
+        noSetup
+        (Lambda (Name "x") (Var (Name "x")))
+        (Lambda (Name "x") (Var (Name "x")))
+    testNormIs
+        "shadowing"
+        noSetup
+        ( Lambda
+            (Name "x")
             ( Lambda
                 (Name "x")
                 ( Lambda
-                    (Name "x")
-                    ( Lambda
-                        (Name "y")
-                        (App (Var (Name "y")) (Var (Name "x")))
-                    )
+                    (Name "y")
+                    (App (Var (Name "y")) (Var (Name "x")))
                 )
             )
+        )
+        ( Lambda
+            (Name "x")
             ( Lambda
                 (Name "x")
                 ( Lambda
-                    (Name "x")
-                    ( Lambda
-                        (Name "y")
-                        (App (Var (Name "y")) (Var (Name "x")))
-                    )
+                    (Name "y")
+                    (App (Var (Name "y")) (Var (Name "x")))
                 )
             )
-        testNormIs
-            "3"
-            defineChurchNums
-            (toChurch 3)
+        )
+    testNormIs
+        "3"
+        defineChurchNums
+        (toChurch 3)
+        ( Lambda
+            (Name "f")
             ( Lambda
-                (Name "f")
-                ( Lambda
-                    (Name "x")
+                (Name "x")
+                ( App
+                    (Var (Name "f"))
                     ( App
                         (Var (Name "f"))
                         ( App
                             (Var (Name "f"))
-                            ( App
-                                (Var (Name "f"))
-                                (Var (Name "x"))
-                            )
+                            (Var (Name "x"))
                         )
                     )
                 )
             )
-        testNormIs
-            "5"
-            ( \env -> do
-                env' <- defineChurchNums env; defineChurchAdd env'
-            )
-            ( App
-                (App (Var (Name "+")) (toChurch 3))
-                (toChurch 2)
-            )
+        )
+    testNormIs
+        "5"
+        ( \env -> do
+            env' <- defineChurchNums env; defineChurchAdd env'
+        )
+        ( App
+            (App (Var (Name "+")) (toChurch 3))
+            (toChurch 2)
+        )
+        ( Lambda
+            (Name "f")
             ( Lambda
-                (Name "f")
-                ( Lambda
-                    (Name "x")
+                (Name "x")
+                ( App
+                    (Var (Name "f"))
                     ( App
                         (Var (Name "f"))
                         ( App
@@ -365,61 +375,60 @@ main =
                                 (Var (Name "f"))
                                 ( App
                                     (Var (Name "f"))
-                                    ( App
-                                        (Var (Name "f"))
-                                        (Var (Name "x"))
-                                    )
+                                    (Var (Name "x"))
                                 )
                             )
                         )
                     )
                 )
             )
-        testNormIs
-            "Capture-avoidance"
-            noSetup
-            ( Lambda
-                (Name "x")
-                ( App
+        )
+    testNormIs
+        "Capture-avoidance"
+        noSetup
+        ( Lambda
+            (Name "x")
+            ( App
+                ( Lambda
+                    (Name "y")
                     ( Lambda
-                        (Name "y")
-                        ( Lambda
-                            (Name "x")
-                            (Var (Name "y"))
-                        )
+                        (Name "x")
+                        (Var (Name "y"))
                     )
-                    (Var (Name "x"))
                 )
+                (Var (Name "x"))
             )
+        )
+        ( Lambda
+            (Name "y")
             ( Lambda
-                (Name "y")
-                ( Lambda
-                    (Name "z")
-                    (Var (Name "y"))
-                )
+                (Name "z")
+                (Var (Name "y"))
             )
-        testNormIs "3 = 3" noSetup (CstI 3) (CstI 3)
-        testNormIs "15 = 15" noSetup (CstI 15) (CstI 15)
-        -- Added test cases
-        testNormIs
-            "(car (cons 2 4)) = 2"
-            noSetup
-            (Car (Cons (CstI 2) (CstI 4)))
-            (CstI 2)
-        testNormIs
-            "(car (cons a d)) = a"
-            noSetup
+        )
+    testNormIs "3 = 3" noSetup (CstI 3) (CstI 3)
+    testNormIs "15 = 15" noSetup (CstI 15) (CstI 15)
+    -- Added test cases
+    testNormIs
+        "(car (cons 2 4)) = 2"
+        noSetup
+        (Car (Cons (CstI 2) (CstI 4)))
+        (CstI 2)
+    testNormIs
+        "(car (cons a d)) = a"
+        noSetup
+        ( Lambda
+            (Name "a")
             ( Lambda
-                (Name "a")
-                ( Lambda
-                    (Name "d")
-                    (Car (Cons (Var (Name "a")) (Var (Name "d"))))
-                )
+                (Name "d")
+                (Car (Cons (Var (Name "a")) (Var (Name "d"))))
             )
+        )
+        ( Lambda
+            (Name "a")
             ( Lambda
-                (Name "a")
-                ( Lambda
-                    (Name "d")
-                    (Var (Name "a"))
-                )
+                (Name "d")
+                (Var (Name "a"))
             )
+        )
+
