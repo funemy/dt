@@ -169,7 +169,7 @@ readBackNeutral used (NCdr ne) = do
 alphaEquiv :: Expr -> Expr -> Bool
 alphaEquiv e1 e2 = helper 0 [] e1 [] e2
   where
-    helper i xs (Var x) ys (Var y) =
+    helper _ xs (Var x) ys (Var y) =
         case (lookup x xs, lookup y ys) of
             (Nothing, Nothing) -> x == y
             (Just n, Just m) -> n == m
@@ -269,12 +269,7 @@ toChurch n
     | otherwise =
         App (Var (Name "add1")) (toChurch (n - 1))
 
-testNormIs ::
-    String ->
-    (Env -> Norm Env) ->
-    Expr ->
-    Expr ->
-    IO ()
+testNormIs :: String -> (Env -> Norm Env) -> Expr -> Expr -> IO ()
 testNormIs name setup expr wanted = do
     putStr (name ++ ": ")
     case setup initEnv of
@@ -288,19 +283,18 @@ testNormIs name setup expr wanted = do
                     | otherwise ->
                         putStrLn "Failed"
 
-testBoolIs name b wanted =
-    do
-        putStr (name ++ ": ")
-        if b == wanted
-            then putStrLn "Success"
-            else putStrLn "Failed"
+testBoolIs name b wanted = do
+    putStr (name ++ ": ")
+    if b == wanted
+        then putStrLn "Success"
+        else putStrLn "Failed"
 
 testTrue name b = testBoolIs name b True
 
 testFalse name b = testBoolIs name b False
 
 noSetup :: Env -> Norm Env
-noSetup env = Right env
+noSetup = return
 
 main :: IO ()
 main = do
@@ -409,6 +403,7 @@ main = do
     testNormIs "3 = 3" noSetup (CstI 3) (CstI 3)
     testNormIs "15 = 15" noSetup (CstI 15) (CstI 15)
     -- Added test cases
+    -- (car (cons a d)) = a
     testNormIs
         "(car (cons 2 4)) = 2"
         noSetup
@@ -431,4 +426,73 @@ main = do
                 (Var (Name "a"))
             )
         )
-
+    -- (cdr (cons a d)) = d
+    testNormIs
+        "(cdr (cons 2 4)) = 4"
+        noSetup
+        (Cdr (Cons (CstI 2) (CstI 4)))
+        (CstI 4)
+    testNormIs
+        "(car (cons a d)) = d"
+        noSetup
+        ( Lambda
+            (Name "a")
+            ( Lambda
+                (Name "d")
+                (Cdr (Cons (Var (Name "a")) (Var (Name "d"))))
+            )
+        )
+        ( Lambda
+            (Name "a")
+            ( Lambda
+                (Name "d")
+                (Var (Name "d"))
+            )
+        )
+    -- (cons a1 d1) = (cons a1 d1)
+    testNormIs
+        "(cons 2 4) = (cons 2 4)"
+        noSetup
+        (Cons (CstI 2) (CstI 4))
+        (Cons (CstI 2) (CstI 4))
+    testNormIs
+        "(fun a d -> (cons a d)) = (fun b c -> (cons b c))"
+        noSetup
+        ( Lambda
+            (Name "a")
+            ( Lambda
+                (Name "d")
+                (Cons (Var (Name "a")) (Var (Name "d")))
+            )
+        )
+        ( Lambda
+            (Name "b")
+            ( Lambda
+                (Name "c")
+                (Cons (Var (Name "b")) (Var (Name "c")))
+            )
+        )
+    -- (car x) = (car x)
+    testNormIs
+        "(car x) = (car x)"
+        noSetup
+        ( Lambda
+            (Name "x")
+            (Car(Var (Name "x")))
+        )
+        ( Lambda
+            (Name "x")
+            (Car(Var (Name "x")))
+        )
+    -- (cdr x) = (cdr x)
+    testNormIs
+        "(cdr x) = (cdr x)"
+        noSetup
+        ( Lambda
+            (Name "x")
+            (Cdr (Var (Name "x")))
+        )
+        ( Lambda
+            (Name "x")
+            (Cdr (Var (Name "x")))
+        )
