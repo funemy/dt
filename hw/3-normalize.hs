@@ -433,7 +433,7 @@ main = do
         (Cdr (Cons (CstI 2) (CstI 4)))
         (CstI 4)
     testNormIs
-        "(car (cons a d)) = d"
+        "(cdr (cons a d)) = d"
         noSetup
         ( Lambda
             (Name "a")
@@ -456,7 +456,7 @@ main = do
         (Cons (CstI 2) (CstI 4))
         (Cons (CstI 2) (CstI 4))
     testNormIs
-        "(fun a d -> (cons a d)) = (fun b c -> (cons b c))"
+        "(cons a d) = (cons b c)"
         noSetup
         ( Lambda
             (Name "a")
@@ -478,11 +478,11 @@ main = do
         noSetup
         ( Lambda
             (Name "x")
-            (Car(Var (Name "x")))
+            (Car (Var (Name "x")))
         )
         ( Lambda
             (Name "x")
-            (Car(Var (Name "x")))
+            (Car (Var (Name "x")))
         )
     -- (cdr x) = (cdr x)
     testNormIs
