@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -W #-}
+
 module Main where
 
 -- First, read and understand the type checker and implementation of typed NbE
@@ -42,7 +44,11 @@ module Main where
 -- Optional bonus problem: Using the implementation of rec-List as a
 -- model, add rec-Nat to the language.
 
-data Ty = Nat | Arr Ty Ty | List Ty
+data Ty
+    = Nat
+    | Arr Ty Ty
+    | List Ty
+    | Trivial
     deriving (Eq, Show)
 
 newtype Msg = Msg String
@@ -72,6 +78,7 @@ data Expr
     | ListCons Expr Expr
     | RecList Ty Expr Expr Expr
     | Ann Expr Ty
+    | Sole
     deriving (Show)
 
 lookupVar (Context []) x = failure ("Var not found" ++ show x)
@@ -93,58 +100,57 @@ synth ctx (Ann e t) = do
 synth ctx (App rator rand) = do
     t <- synth ctx rator
     case t of
-        Arr a b ->
-            do
-                check ctx rand a
-                return b
-        other ->
-            failure ("Expected a function, got a " ++ show other)
+        Arr a b -> do
+            check ctx rand a
+            return b
+        other -> failure ("Expected a function, got a " ++ show other)
 synth ctx (RecList t tgt base step) = do
-    t <- synth ctx tgt
-    case t of
+    tgtTy <- synth ctx tgt
+    case tgtTy of
         List e -> do
             check ctx base t
             check ctx step (Arr e (Arr (List e) (Arr t t)))
             return t
-        other ->
-            failure ("Target of recList must be a list")
-synth ctx other =
+        _ -> failure "Target of recList must be a list"
+synth _ other =
     failure ("Can't synth for " ++ show other)
 
 check :: Context -> Expr -> Ty -> Either Msg ()
-check ctx Zero t =
-    case t of
-        Nat -> return ()
-        other -> failure ("zero expected Nat but got " ++ show other)
+check _ Zero t = case t of
+    Nat -> return ()
+    other -> failure ("zero expected Nat but got " ++ show other)
 check ctx (Add1 n) t =
     case t of
         Nat -> check ctx n Nat
         other -> failure ("add1 expected Nat but got " ++ show other)
-check ctx (Lambda x body) t =
-    case t of
-        Arr a b ->
-            check (extend ctx x a) body b
-        other ->
-            failure ("Lambda needs a function type but got " ++ show other)
-check ctx Nil t =
-    case t of
-        List e -> return ()
-        other ->
-            failure ("nil needs a list type but got " ++ show other)
-check ctx (ListCons hd tl) t =
-    case t of
-        List e -> do
-            check ctx hd e
-            check ctx tl (List e)
-        other ->
-            failure (":: needs a list type but got " ++ show other)
+check ctx (Lambda x body) t = case t of
+    Arr a b -> check (extend ctx x a) body b
+    other -> failure ("Lambda needs a function type but got " ++ show other)
+check _ Nil t = case t of
+    List _ -> return ()
+    other -> failure ("nil needs a list type but got " ++ show other)
+check ctx (ListCons hd tl) t = case t of
+    List e -> do
+        check ctx hd e
+        check ctx tl (List e)
+    other -> failure (":: needs a list type but got " ++ show other)
+-- Checking rule for sole
+--
+--   ---------------- [TrivI]
+--    sole ⇐ Trivial
+check _ Sole t = case t of
+    Trivial -> return ()
+    other -> failure ("solve expcted Trivial but got " ++ show other)
 check ctx e t = do
     t' <- synth ctx e
     if t' == t
         then return ()
         else failure (show t' ++ " /= " ++ show t)
 
-data Neutral = NVar Name | NApp Neutral Norm | NRecList Neutral Norm Norm
+data Neutral
+    = NVar Name
+    | NApp Neutral Norm
+    | NRecList Neutral Norm Norm
 
 data Norm = Norm Ty Value
 
@@ -155,6 +161,7 @@ data Value
     | VNil
     | VListCons Value Value
     | VNeutral Ty Neutral
+    | VSole
 
 evalVar :: Env -> Name -> Value
 evalVar (Env []) x = error ("No value for " ++ show x)
@@ -166,11 +173,12 @@ eval :: Env -> Expr -> Value
 eval env (Var x) = evalVar env x
 eval env (Lambda x body) = VClosure env x body
 eval env (App rator rand) = doApply (eval env rator) (eval env rand)
-eval env Zero = VZero
+eval _ Zero = VZero
 eval env (Add1 k) = VAdd1 (eval env k)
-eval env Nil = VNil
+eval _ Nil = VNil
 eval env (ListCons e es) = VListCons (eval env e) (eval env es)
 eval env (RecList ty tgt base step) = doRecList ty (eval env tgt) (eval env base) (eval env step)
+eval _ Sole = VSole
 eval env (Ann e _) = eval env e
 
 doApply :: Value -> Value -> Value
@@ -178,8 +186,7 @@ doApply (VClosure env x body) arg = eval (extendEnv env x arg) body
 doApply (VNeutral (Arr dom ran) neu) arg = VNeutral ran (NApp neu (Norm dom arg))
 
 doRecList :: Ty -> Value -> Value -> Value -> Value
-doRecList ty VNil base step =
-    base
+doRecList _ VNil base _ = base
 doRecList ty (VListCons v vs) base step =
     doApply (doApply (doApply step v) vs) (doRecList ty vs base step)
 doRecList ty (VNeutral (List e) neu) base step =
@@ -187,7 +194,7 @@ doRecList ty (VNeutral (List e) neu) base step =
 
 freshen :: [Name] -> Name -> Name
 freshen used x
-    | elem x used = freshen used (nextName x)
+    | x `elem` used = freshen used (nextName x)
     | otherwise = x
   where
     nextName (Name y) = Name (y ++ "'")
@@ -197,25 +204,27 @@ getArgName (VClosure _ x _) = x
 getArgName _ = Name "x"
 
 readBack :: [Name] -> Ty -> Value -> Expr
-readBack used Nat VZero =
-    Zero
+readBack _ Nat VZero = Zero
 readBack used Nat (VAdd1 n) =
     Add1 (readBack used Nat n)
-readBack used (List e) VNil =
-    Nil
+readBack _ (List _) VNil = Nil
 readBack used (List e) (VListCons v vs) =
     ListCons (readBack used e v) (readBack used (List e) vs)
 readBack used (Arr dom ran) v =
     let x = freshen used (getArgName v)
      in Lambda x (readBack (x : used) ran (doApply v (VNeutral dom (NVar x))))
+-- eta-rule for Trivial
+--       e : Trivial
+--   --------------------- [Triv-η]
+--     sole ≡ e : Trivial
+readBack _ Trivial _ = Sole
 readBack used t (VNeutral t' neu) =
     if t == t'
         then readBackNeutral used neu
         else error "Internal error: types that should match don't"
 
 readBackNeutral :: [Name] -> Neutral -> Expr
-readBackNeutral used (NVar x) =
-    Var x
+readBackNeutral used (NVar x) = Var x
 readBackNeutral used (NApp neu (Norm t arg)) =
     App (readBackNeutral used neu) (readBack used t arg)
 readBackNeutral used (NRecList neu (Norm bt base) (Norm st step)) =
@@ -230,7 +239,7 @@ normalize e = do
 alphaEquiv :: Expr -> Expr -> Bool
 alphaEquiv e1 e2 = helper 0 [] e1 [] e2
   where
-    helper i xs (Var x) ys (Var y) =
+    helper _ xs (Var x) ys (Var y) =
         case (lookup x xs, lookup y ys) of
             (Nothing, Nothing) -> x == y
             (Just i, Just j) -> i == j
@@ -245,11 +254,14 @@ alphaEquiv e1 e2 = helper 0 [] e1 [] e2
     helper i xs (ListCons e1 es1) ys (ListCons e2 es2) =
         helper i xs e1 ys e2 && helper i xs es1 ys es2
     helper i xs (RecList t1 tgt1 b1 s1) ys (RecList t2 tgt2 b2 s2) =
-        t1
-            == t2
+        (t1 == t2)
             && helper i xs tgt1 ys tgt2
             && helper i xs b1 ys b2
             && helper i xs s1 ys s2
+    helper _ _ Sole _ Sole = True
+    helper i xs (Ann e1 ty1) ys (Ann e2 ty2) =
+        (ty1 == ty2) && helper i xs e1 ys e2
+    helper _ _ _ _ _ = False
 
 ---------------------------------------------------------------------------
 
@@ -275,9 +287,116 @@ main = do
         (Lambda (Name "f") (Lambda (Name "x") (App (Var (Name "f")) (Var (Name "x")))))
     testNorm
         "Append"
-        (Ann (Lambda (Name "xs") (Lambda (Name "ys") (RecList (List Nat) (Var (Name "xs")) (Var (Name "ys")) (Lambda (Name "z") (Lambda (Name "_") (Lambda (Name "so-far") (ListCons (Var (Name "z")) (Var (Name "so-far"))))))))) (Arr (List Nat) (Arr (List Nat) (List Nat))))
-        (Lambda (Name "xs") (Lambda (Name "ys") (RecList (List Nat) (Var (Name "xs")) (Var (Name "ys")) (Lambda (Name "z") (Lambda (Name "_") (Lambda (Name "so-far") (ListCons (Var (Name "z")) (Var (Name "so-far")))))))))
+        ( Ann
+            ( Lambda
+                (Name "xs")
+                ( Lambda
+                    (Name "ys")
+                    ( RecList
+                        (List Nat)
+                        (Var (Name "xs"))
+                        (Var (Name "ys"))
+                        ( Lambda
+                            (Name "z")
+                            ( Lambda
+                                (Name "_")
+                                ( Lambda
+                                    (Name "so-far")
+                                    (ListCons (Var (Name "z")) (Var (Name "so-far")))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+            (Arr (List Nat) (Arr (List Nat) (List Nat)))
+        )
+        ( Lambda
+            (Name "xs")
+            ( Lambda
+                (Name "ys")
+                ( RecList
+                    (List Nat)
+                    (Var (Name "xs"))
+                    (Var (Name "ys"))
+                    ( Lambda
+                        (Name "z")
+                        ( Lambda
+                            (Name "_")
+                            ( Lambda
+                                (Name "so-far")
+                                (ListCons (Var (Name "z")) (Var (Name "so-far")))
+                            )
+                        )
+                    )
+                )
+            )
+        )
     testNorm
         "Append (:: 1 (:: 2 nil))"
-        (App (Ann (Lambda (Name "xs") (Lambda (Name "ys") (RecList (List Nat) (Var (Name "xs")) (Var (Name "ys")) (Lambda (Name "z") (Lambda (Name "_") (Lambda (Name "so-far") (ListCons (Var (Name "z")) (Var (Name "so-far"))))))))) (Arr (List Nat) (Arr (List Nat) (List Nat)))) (ListCons (Add1 Zero) (ListCons (Add1 (Add1 Zero)) Nil)))
-        (Lambda (Name "ys") (ListCons (Add1 Zero) (ListCons (Add1 (Add1 Zero)) (Var (Name "ys")))))
+        ( App
+            ( Ann
+                ( Lambda
+                    (Name "xs")
+                    ( Lambda
+                        (Name "ys")
+                        ( RecList
+                            (List Nat)
+                            (Var (Name "xs"))
+                            (Var (Name "ys"))
+                            (Lambda (Name "z") (Lambda (Name "_") (Lambda (Name "so-far") (ListCons (Var (Name "z")) (Var (Name "so-far"))))))
+                        )
+                    )
+                )
+                (Arr (List Nat) (Arr (List Nat) (List Nat)))
+            )
+            (ListCons (Add1 Zero) (ListCons (Add1 (Add1 Zero)) Nil))
+        )
+        ( Lambda
+            (Name "ys")
+            ( ListCons
+                (Add1 Zero)
+                (ListCons (Add1 (Add1 Zero)) (Var (Name "ys")))
+            )
+        )
+    testNorm
+        "Length of nat lists"
+        ( Ann
+            ( Lambda
+                (Name "xs")
+                ( RecList
+                    Nat
+                    (Var (Name "xs"))
+                    Zero
+                    (Lambda (Name "hd") (Lambda (Name "_") (Lambda (Name "len") (Add1 (Var (Name "len"))))))
+                )
+            )
+            (Arr (List Nat) Nat)
+        )
+        ( Lambda
+            (Name "xs")
+            ( RecList
+                Nat
+                (Var (Name "xs"))
+                Zero
+                (Lambda (Name "hd") (Lambda (Name "_") (Lambda (Name "len") (Add1 (Var (Name "len"))))))
+            )
+        )
+    testNorm
+        "Length of a nat list with two elements"
+        ( App
+            ( Ann
+                ( Lambda
+                    (Name "xs")
+                    ( RecList
+                        Nat
+                        (Var (Name "xs"))
+                        Zero
+                        (Lambda (Name "hd") (Lambda (Name "_") (Lambda (Name "len") (Add1 (Var (Name "len"))))))
+                    )
+                )
+                (Arr (List Nat) Nat)
+            )
+            (ListCons Zero (ListCons Zero Nil))
+        )
+        (Add1 (Add1 Zero))
