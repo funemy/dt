@@ -28,18 +28,22 @@ module Main where
 -- 2. What should the normal for be for
 --    Ann (Lambda (Name "x") (Var (Name "x"))) (Arr Trivial Trivial) ?
 --    Write your answer here, and add it as a test:
+--    Lambda (Name "x") Sole
 --
 -- 3. What should the normal for be for
 --    Ann (Lambda (Name "x") (Var (Name "x"))) (Arr Nat Nat) ?
 --    Write your answer here:
+--    Lambda (Name "x") (Var (Name "x")))
 --
 -- 4. What should the normal for be for
 --    Ann (Lambda (Name "x") (Var (Name "x"))) (Arr (Arr Nat Nat) (Arr Nat Nat)) ?
 --    Write your answer here:
+--    (Lambda (Name "x") (Lambda (Name "y") (App (Name "x") (Name "y"))))
 --
 -- 5. What should the normal for be for
 --    Ann (Lambda (Name "x") (Var (Name "x"))) (Arr (Arr Nat Trivial) (Arr Nat Trivial)) ?
 --    Write your answer here, and add it as a test:
+--    (Lambda (Name "x") (Lambda (Name "y") Sole))
 --
 -- Optional bonus problem: Using the implementation of rec-List as a
 -- model, add rec-Nat to the language.
@@ -400,3 +404,19 @@ main = do
             (ListCons Zero (ListCons Zero Nil))
         )
         (Add1 (Add1 Zero))
+    testNorm
+        "Normalizing fun x -> x : Trivial -> Trivial"
+        (Ann (Lambda (Name "x") (Var (Name "x"))) (Arr Trivial Trivial))
+        (Lambda (Name "x") Sole)
+    testNorm
+        "Normalizing fun x -> x : Nat -> Nat"
+        (Ann (Lambda (Name "x") (Var (Name "x"))) (Arr Nat Nat))
+        (Lambda (Name "x") (Var (Name "x")))
+    testNorm
+        "Normalizing fun x -> x : (Nat -> Nat) -> (Nat -> Nat)"
+        (Ann (Lambda (Name "x") (Var (Name "x"))) (Arr (Arr Nat Nat) (Arr Nat Nat)))
+        (Lambda (Name "x") (Lambda (Name "y") (App (Var (Name "x")) (Var (Name "y")))))
+    testNorm
+        "Normalzing fun x -> x : (Nat -> Trivial) -> (Nat -> Trivial)"
+        (Ann (Lambda (Name "x") (Var (Name "x"))) (Arr (Arr Nat Trivial) (Arr Nat Trivial)))
+        (Lambda (Name "x") (Lambda (Name "y") Sole))
