@@ -102,11 +102,17 @@
   (Π ((n Nat))
     (= Nat (sub1 (add1 n)) n)))
 
+(define sub1-add1-inverse
+  (lambda (n) (same n)))
+
 ;; 2. The identity function returns its argument unchanged
 (claim id-is-identity
   (Π ((A U)
       (a A))
     (= A a (id A a))))
+
+(define id-is-identity
+  (lambda (A a) (same a)))
 
 ;; 3. Addition is associative
 (claim +-associative
@@ -117,15 +123,34 @@
      (+ x (+ y z))
      (+ (+ x y) z))))
 
+(define +-associative
+  (lambda (x y z)
+    (ind-Nat
+      x
+      (lambda (k) (= Nat (+ k (+ y z)) (+ (+ k y) z)))
+      (same (+ y z))
+      (lambda (k IH) (cong IH (+ 1))))))
+
 ;; 4. Zero is a left identity of +
 (claim +-left-zero
   (Π ((n Nat))
     (= Nat (+ 0 n) n)))
 
+(define +-left-zero
+  (lambda (n) (same n)))
+
 ;; 5. Zero is a right identity of +
 (claim +-right-zero
   (Π ((n Nat))
     (= Nat (+ n 0) n)))
+
+(define +-right-zero
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (+ k 0) k))
+      (same 0)
+      (lambda (k IH) (cong IH (+ 1))))))
 
 ;; 6. Add1 in the first argument to + can be lifted to the top level
 (claim +-left-add1
@@ -133,11 +158,23 @@
       (m Nat))
     (= Nat (+ (add1 n) m) (add1 (+ n m)))))
 
+(define +-left-add1
+  (lambda (n m)
+    (same (add1 (+ n m)))))
+
 ;; 7. Add1 in the second argument to + can be lifted to the top level
 (claim +-right-add1
   (Π ((n Nat)
       (m Nat))
     (= Nat (+ n (add1 m)) (add1 (+ n m)))))
+
+(define +-right-add1
+  (lambda (n m)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (+ k (add1 m)) (add1 (+ k m))))
+      (same (add1 m))
+      (lambda (k IH) (cong IH (+ 1))))))
 
 ;; 8. Add1 undoes sub1, unless the argument was 0
 (claim add1-sub1-almost-inverse
@@ -149,19 +186,47 @@
           (λ (n-1)
             n)))))
 
+(define add1-sub1-almost-inverse
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (add1 (sub1 k)) (which-Nat k 1 (lambda (k-1) k))))
+      (same 1)
+      (lambda (k IH) (same (add1 k))))))
+
 
 ;; 9. The maximum of a number and itself is itself
 (claim max-idempotent
   (Π ((n Nat))
     (= Nat n (max n n))))
 
+(define max-idempotent
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat k (max k k)))
+      (same 0)
+      (lambda (k IH) (cong IH (+ 1))))))
+
 ;; 10. Zero is a left identity of max
 (claim max-zero-left
   (Π ((n Nat))
     (= Nat (max 0 n) n)))
+
+(define max-zero-left
+  (lambda (n)
+    (same n)))
 
 ;; 11. Zero is a right identity of max
 (claim max-zero-right
   (Π ((n Nat))
     (= Nat (max n 0) n)))
 
+
+(define max-zero-right
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (max k 0) k))
+      (same 0)
+      (lambda (k IH) (same (add1 k))))))
