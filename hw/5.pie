@@ -194,7 +194,6 @@
       (same 1)
       (lambda (k IH) (same (add1 k))))))
 
-
 ;; 9. The maximum of a number and itself is itself
 (claim max-idempotent
   (Π ((n Nat))
@@ -221,7 +220,6 @@
 (claim max-zero-right
   (Π ((n Nat))
     (= Nat (max n 0) n)))
-
 
 (define max-zero-right
   (lambda (n)
