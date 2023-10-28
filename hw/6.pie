@@ -13,6 +13,7 @@
 (claim step-+
   (-> Nat
     Nat))
+
 (define step-+
   (λ (n)
     (add1 n)))
@@ -38,6 +39,7 @@
 (claim *
   (-> Nat Nat
     Nat))
+
 (define *
   (λ (n j)
     (rec-Nat n
@@ -49,19 +51,42 @@
   (Π ((n Nat))
     (= Nat (+ 0 n) n)))
 
+(define +-left-zero
+  (lambda (n) (same n)))
+
 (claim +-right-zero
   (Π ((n Nat))
     (= Nat (+ n 0) n)))
+
+(define +-right-zero
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (+ k 0) k))
+      (same 0)
+      (lambda (k IH) (cong IH (+ 1))))))
 
 (claim +-left-add1
   (Π ((n Nat)
       (m Nat))
     (= Nat (+ (add1 n) m) (add1 (+ n m)))))
 
+(define +-left-add1
+  (lambda (n m)
+    (same (add1 (+ n m)))))
+
 (claim +-right-add1
   (Π ((n Nat)
       (m Nat))
     (= Nat (add1 (+ n m)) (+ n (add1 m)))))
+
+(define +-right-add1
+  (lambda (n m)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (add1 (+ k m)) (+ k (add1 m))))
+      (same (add1 m))
+      (lambda (k IH) (cong IH (+ 1))))))
 
 (claim +-associative
   (Π ((l Nat)
@@ -70,6 +95,14 @@
     (= Nat
      (+ l (+ m r))
      (+ (+ l m) r))))
+
+(define +-associative
+  (lambda (x y z)
+    (ind-Nat
+      x
+      (lambda (k) (= Nat (+ k (+ y z)) (+ (+ k y) z)))
+      (same (+ y z))
+      (lambda (k IH) (cong IH (+ 1))))))
 
 ;;;;;;;;;;
 ;; Mandatory problems
