@@ -122,6 +122,10 @@
     (→ (Non-Empty E es)
       E)))
 
+(define first-of-non-empty
+  (lambda (E es ne)
+    (car ne)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Problem 2: Given a proof that a list is not empty, find all entries
@@ -132,11 +136,14 @@
     (→ (Non-Empty E es)
       (List E))))
 
+(define rest-of-non-empty
+  (lambda (E es ne)
+    (car (cdr ne))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Problem 3: Prove that first-of-non-empty and rest-of-non-empty make sense: combining them with
 ;; the constructor :: should be equal to the original list.
-#;
 (claim first-of-non-empty-and-rest-of-non-empty-ok
   (Π ((E U)
       (es (List E))
@@ -145,6 +152,10 @@
        es
        (:: (first-of-non-empty E es non-empty)
          (rest-of-non-empty E es non-empty)))))
+
+(define first-of-non-empty-and-rest-of-non-empty-ok
+  (lambda (E es ne)
+    (cdr (cdr ne))))
 
 
 ;; A definition of what it means for something to be the first entry
@@ -168,21 +179,44 @@
     (→ E (List E)
       U)))
 
+(define Member
+  (lambda (E e es)
+    (rec-List
+      es
+      Absurd
+      (lambda (x xs prev)
+        (Either (= E e x) prev)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Problem 5: Translate this statement to a type and prove it:
 ;; "'fig is an entry somewhere in the list:
 ;;    'avocado, 'apple, 'plum, 'fig, 'peach, 'orange"
 
+(claim p5-list
+  (List Atom))
+
+(define p5-list
+  (:: 'avocado (:: 'apple (:: 'plum (:: 'fig (:: 'peach (:: 'orange nil)))))))
+
+(claim fig-is-a-member
+  (Member Atom 'fig p5-list))
+
+(define fig-is-a-member
+  (right (right (right (left (same 'fig))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Problem 6: Prove that attaching a new entry to a list with ::
 ;; results in a list containing the new entry
-#;
 (claim ::-member-first
   (Π ((E U)
       (e E)
       (es (List E)))
     (Member E e (:: e es))))
+
+(define ::-member-first
+  (lambda (E e es)
+    (left (same e))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -194,9 +228,19 @@
       (f (→ X
            Y))
       (xs (List X)))
-    (= Nat 
+    (= Nat
        (length X xs)
        (length Y (map X Y f xs)))))
+
+(define map-preserves-length
+  (lambda (X Y f xs)
+    (ind-List
+      xs
+      (lambda (xs) (= Nat
+                      (length X xs)
+                      (length Y (map X Y f xs))))
+      (same 0)
+      (lambda (x xs IH) (cong IH (+ 1))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -212,6 +256,25 @@
     (= (List Y)
        (append Y (map X Y f front) (map X Y f back))
        (map X Y f (append X front back)))))
+
+;; wrap the constructor (::) into a function
+(claim ::f
+       (Pi ((X U)
+            (x X))
+           (-> (List X)
+               (List X))))
+(define ::f
+  (lambda (X x) (lambda (lst) (:: x lst))))
+
+(define append-map-append
+  (lambda (X Y f front back)
+    (ind-List
+      front
+      (lambda (xs) (= (List Y)
+                      (append Y (map X Y f xs) (map X Y f back))
+                      (map X Y f (append X xs back))))
+      (same (map X Y f back))
+      (lambda (x xs IH) (cong IH (::f Y (f x)))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -230,6 +293,16 @@
        (map Y Z g (map X Y f xs))
        (map X Z (λ (x) (g (f x))) xs))))
 
+(define map-fusion
+  (lambda (X Y Z f g lst)
+    (ind-List
+      lst
+      (lambda (xs) (= (List Z)
+                      (map Y Z g (map X Y f xs))
+                      (map X Z (λ (x) (g (f x))) xs)))
+      (same nil)
+      (lambda (x xs IH) (cong IH (::f Z (g (f x))))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Problem 10: Find a list that is the left and right identity of
@@ -240,6 +313,29 @@
     (Σ ((neutral (List E)))
        (Pair (= (List E) es (append E neutral es))
              (= (List E) es (append E es neutral))))))
+
+(claim nil-left-id
+    (Pi ((E U)
+         (es (List E)))
+        (= (List E) es (append E nil es))))
+(define nil-left-id
+  (lambda (E es) (same es)))
+
+(claim nil-right-id
+  (Pi ((E U)
+       (es (List E)))
+       (= (List E) es (append E es nil))))
+(define nil-right-id
+  (lambda (E es)
+    (ind-List
+      es
+      (lambda (xs) (= (List E) xs (append E xs nil)))
+      (same nil)
+      (lambda (x xs IH) (cong IH (::f E x))))))
+
+(define exists-neutral-append
+  (lambda (E es)
+    (cons nil (cons (nil-left-id E es) (nil-right-id E es)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -252,6 +348,16 @@
          Y)
        (Vec X len)
       (Vec Y len))))
+
+(define map-Vec
+  (lambda (X Y len f vx)
+    (ind-Vec
+      len vx
+      (lambda (k vk) (Vec Y k))
+      vecnil
+      (lambda (k e es vyk)
+        (vec:: (f e) vyk)))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Problem 12: Prove that the recursive version of length for Vec finds the
@@ -274,7 +380,13 @@
       (len Nat)
       (xs (Vec E len)))
     (= Nat (length-Vec E len xs) len)))
-
+(define length-correct
+  (lambda (E len xs)
+    (ind-Vec
+      len xs
+      (lambda (k xs) (= Nat (length-Vec E k xs) k))
+      (same 0)
+      (lambda (k e es IH) (cong IH (+ 1))))))
 
 
 
