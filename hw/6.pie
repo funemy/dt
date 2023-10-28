@@ -115,29 +115,67 @@
       (m Nat))
     (= Nat (+ n m) (+ m n))))
 
+(define +-commutative
+  (lambda (n m)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (+ k m) (+ m k)))
+      (symm (+-right-zero m))
+      (lambda (k IH)
+        (trans (cong IH (+ 1)) (+-right-add1 m k))))))
+
 ;; 2 and 3. Show that anything times 0 is 0, both ways around
 (claim *-left-zero
   (Π ((n Nat))
     (= Nat (* zero n) zero)))
 
+(define *-left-zero
+  (lambda (n)
+    (same 0)))
+
 (claim *-right-zero
   (Π ((n Nat))
     (= Nat (* n zero) zero)))
+
+(define *-right-zero
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (* k 0) 0))
+      (same 0)
+      (lambda (k IH) IH))))
 
 ;; 4 and 5. Show that 1 is a left and right identity of *
 (claim *-left-1
   (Π ((n Nat))
     (= Nat (* 1 n) n)))
 
+(define *-left-1
+  (lambda (n)
+    (+-right-zero n)))
+
 (claim *-right-1
   (Π ((n Nat))
     (= Nat (* n 1) n)))
+
+(define *-right-1
+  (lambda (n)
+    (ind-Nat
+      n
+      (lambda (k) (= Nat (* k 1) k))
+      (same 0)
+      (lambda (k IH) (cong IH (+ 1))))))
+
 
 ;; 6. Show that ((1 + a) * b) = b + a * b
 (claim *-left-add1
   (Π ((a Nat)
       (b Nat))
     (= Nat (* (add1 a) b) (+ b (* a b)))))
+
+(define *-left-add1
+  (lambda (a b)
+    (same (* (add1 a) b))))
 
 
 ;; 7. Write this proof without using ind-Nat in your answer.
@@ -149,12 +187,45 @@
      (+ a (+ b c))
      (+ b (+ a c)))))
 
+(claim +kc
+  (-> Nat
+    (-> Nat Nat)))
+
+(define +kc
+  (lambda (c)
+    (lambda (k) (+ k c))))
+
+
+(define +-swap-first-two-of-three
+  (lambda (a b c)
+    (trans
+      (trans (+-associative a b c)               ;; (+ a (+ b c)) == (+ (+ a b) c)
+             (cong (+-commutative a b) (+kc c))) ;; (+ (+ a b) c) == (+ (+ b a) c)
+      (symm (+-associative b a c)))))            ;; (+ (+ b a) c) == (+ b (+ a c))
+
 
 ;; 8. Prove this statement.
 (claim *-right-add1
   (Π ((a Nat)
       (b Nat))
     (= Nat (* a (add1 b)) (+ a (* a b)))))
+
+(define *-right-add1
+  (lambda (a b)
+    (ind-Nat
+      a
+      (lambda (k) (= Nat (* k (add1 b)) (+ k (* k b))))
+      (same 0)
+      (lambda (k IH)
+        (trans
+          (cong IH (+ (add1 b)))
+          (cong (+-swap-first-two-of-three b k (* k b)) (+ 1)))))))
+;; IH : (* k (add1 b)) == (+ k (* k b))
+;; pf : (+ (add1 b) (* k (add1 b))) == (+ (add1 k) (+ b (* k b)))
+;; cong (+ (add1 b)) (* k (add1 b)) == (+ k (* k b))
+;;  --> add1 (+ b (* k (add1 b))) == add1 (+ b (+ k (* k b)))
+;; then we have (by +-swap-first-two-of-three)
+;;  add1 (+ b (+ k (* k b))) == add1 (+ k (+ b (* k b)))
 
 ;; 9. Show that ind-Nat can do anything rec-Nat can do.  In the
 ;;    definition of rec-Nat*, the only eliminator for Nat that you are
@@ -167,9 +238,17 @@
             X)
       X)))
 
+(define rec-Nat*
+  (lambda (X n base step)
+    (ind-Nat
+      n
+      (lambda (k) X)
+      base
+      step)))
+
+
 ;; 10. Prove that your definition of rec-Nat* always finds the same answer
 ;;     as the built-in rec-Nat. Uncomment this claim after finishing question 9.
-#;
 (claim rec-Nat*-ok
   (Π ((X U)
       (target Nat)
@@ -179,6 +258,16 @@
     (= X
       (rec-Nat* X target base step)
       (rec-Nat target base step))))
+
+(define rec-Nat*-ok
+  (lambda (X tgt base step)
+    (ind-Nat
+      tgt
+      (lambda (k) (= X
+                     (rec-Nat* X k base step)
+                     (rec-Nat k base step)))
+      (same base)
+      (lambda (k IH) (cong IH (step k))))))
 
 ;; 11, 12, 13: Show that replace can do anything that cong, symmetry,
 ;;             and trans can do. Use no eliminators other than replace
@@ -193,12 +282,26 @@
     (-> (= X from to)
      (= Y (f from) (f to)))))
 
+(define replace-can-cong
+  (lambda (X Y from to f from=to)
+    (replace
+      from=to
+      (lambda (x) (= Y (f from) (f x)))
+      (same (f from)))))
+
 (claim replace-can-symm
   (Π ((X U)
       (from X)
       (to X))
     (-> (= X from to)
      (= X to from))))
+
+(define replace-can-symm
+  (lambda (X from to from=to)
+    (replace
+      from=to
+      (lambda (x) (= X x from))
+      (same from))))
 
 (claim replace-can-trans
   (Π ((X U)
@@ -208,6 +311,12 @@
     (-> (= X l m) (= X m r)
      (= X l r))))
 
+(define replace-can-trans
+  (lambda (X l m r l=m m=r)
+    (replace
+      m=r
+      (lambda (x) (= X l x))
+      l=m)))
 
 
 ;;; Challenge problems
