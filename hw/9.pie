@@ -221,6 +221,17 @@
             (es (List E)))
            (Dec (= (List E) nil es))))
 
+(define nil?
+  (lambda (E es)
+    (ind-List
+      es
+      (lambda (xs) (Dec (= (List E) nil xs)))
+      (left (same nil))
+      (lambda (x xs IH)
+        (right
+          (lambda (assumption)
+            (use-list= E nil (:: x xs) assumption)))))))
+
 ;; 8. Prove that the equality of lists is decidable if the equality of
 ;; their members is decidable.
 ;;
@@ -239,6 +250,25 @@
 ;;
 ;; It is worth your while to define helper functions for the various
 ;; bases and steps. Giving them memorable names also helps.
+;;
+;;
+;; Informal Proof:
+;; Assuming we are determining the equality of two lists of Nats.
+;; We can decide the equality inductively:
+;;  a) If both lists are empty, then they are trivially equal.
+;;  b) If one is empty and the other is not, then they are trivially not equal,
+;;  c) If both are non-empty, then we divide the decision problem into
+;;     first deciding the heads of the lists are equal and the tails
+;;     of the lists are equal.
+;;     - Deciding whether the heads are equal is essentially decide whether
+;;       two Nats are equal (since we assumed Nat lists).
+;;       Since we assume the equality on Nat is decideable, then deciding
+;;       whether heads are equal is decideable as well.
+;;     - The equality of two tails being decideable is our inductive hypothesis,
+;;       therefore it is also true.
+;;     In conclusion, in the case both lists are non-empty, determining
+;;     their equality is decideable.
+;;
 (claim list=?
        (Pi ((E U)
             (=? (Pi ((v E) (w E)) (Dec (= E v w))))
@@ -246,3 +276,107 @@
             (ys (List E)))
            (Dec (= (List E) xs ys))))
 
+(claim lemma/dec-nil=ys
+  (Pi ((E U)
+       (lys (List E)))
+      (Dec (= (List E) nil lys))))
+
+(define lemma/dec-nil=ys
+  (lambda (E lys) (nil? E lys)))
+
+(claim lemma/dec-x::xs=nil
+  (Pi ((E U)
+       (x E)
+       (xs (List E)))
+      (Dec (= (List E) (:: x xs) nil))))
+
+(define lemma/dec-x::xs=nil
+  (lambda (E x xs)
+    (right
+      (lambda (x::xs=nil)
+        (use-list= E (:: x xs) nil x::xs=nil)))))
+
+(claim ::f
+       (Pi ((X U)
+            (x X))
+           (-> (List X)
+               (List X))))
+(define ::f
+  (lambda (X x) (lambda (lst) (:: x lst))))
+
+(claim lemma/xs=ys->dec-x::xs=y::ys
+  (Pi ((E U)
+       (x E)
+       (y E)
+       (xs (List E))
+       (ys (List E))
+       (=? (Pi ((v E) (w E)) (Dec (= E v w))))
+       (xs=ys (= (List E) xs ys)))
+      (Dec (= (List E) (:: x xs) (:: y ys)))))
+
+(define lemma/xs=ys->dec-x::xs=y::ys
+  (lambda (E x y xs ys =? xs=ys)
+    (ind-Either
+      (=? x y)
+      (lambda (_) (Dec (= (List E) (:: x xs) (:: y ys))))
+      (lambda (x=y)
+        (left
+          (replace
+            x=y
+            (lambda (k) (= (List E) (:: x xs) (:: k ys)))
+            (cong xs=ys (::f E x)))))
+      (lambda (x!=y)
+        (right
+          (lambda (x::xs=y::ys)
+            (x!=y
+              (car (use-list= E (:: x xs) (:: y ys) x::xs=y::ys)))))))))
+
+(claim lemma/xs!=ys->x::xs!=y::ys
+  (Pi ((E U)
+       (x E)
+       (y E)
+       (xs (List E))
+       (ys (List E)))
+      (-> (Not (= (List E) xs ys))
+          (Not (= (List E) (:: x xs) (:: y ys))))))
+
+(define lemma/xs!=ys->x::xs!=y::ys
+  (lambda (E x y xs ys xs!=ys)
+    (lambda (x::xs=y::ys)
+      (xs!=ys
+        (cdr (use-list= E (:: x xs) (:: y ys) x::xs=y::ys))))))
+
+(claim lemma/xs!=ys->dec-x::xs=y::ys
+  (Pi ((E U)
+       (x E)
+       (y E)
+       (xs (List E))
+       (ys (List E))
+       (xs!=ys (Not (= (List E) xs ys))))
+      (Dec (= (List E) (:: x xs) (:: y ys)))))
+
+(define lemma/xs!=ys->dec-x::xs=y::ys
+  (lambda (E x y xs ys xs!=ys)
+    (right
+      (lemma/xs!=ys->x::xs!=y::ys E x y xs ys xs!=ys))))
+
+(define list=?
+  (lambda (E =?dec lxs)
+    (ind-List
+      lxs
+      (lambda (ks)
+        (Pi ((lys (List E)))
+            (Dec (= (List E) ks lys))))
+      (lemma/dec-nil=ys E)
+      (lambda (x xs IHx)
+        (lambda (lys)
+          (ind-List
+            lys
+            (lambda (ks) (Dec (= (List E) (:: x xs) ks)))
+            (lemma/dec-x::xs=nil E x xs)
+            (lambda (y ys IHy)
+              (ind-Either
+                (IHx ys)
+                (lambda (_) (Dec (= (List E) (:: x xs) (:: y ys))))
+                (lemma/xs=ys->dec-x::xs=y::ys E x y xs ys =?dec)
+                (lemma/xs!=ys->dec-x::xs=y::ys E x y xs ys)))))))))
