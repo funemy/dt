@@ -59,9 +59,9 @@
 ;; 3. Prove that the consequences of equality hold for every list.
 ;; Uncomment this claim after defining list=consequences.
 (claim list=consequences-same
-       (Pi ((E U))
-           (Pi ((es (List E)))
-               (list=consequences E es es))))
+       (Pi ((E U)
+            (es (List E)))
+           (list=consequences E es es)))
 
 (define list=consequences-same
   (lambda (E es)
