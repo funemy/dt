@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -W #-}
+
 module Main where
 
 -- This file is a type checker for a smaller relative of Pie, called Tartlet.
@@ -13,7 +15,6 @@ module Main where
 --       * ____ and ____ are the same type
 --
 --  3. Some type constructors in Pie are missing, such as Either.
-
 
 -- Your tasks:
 --
@@ -86,175 +87,186 @@ module Main where
 -- to make a checkable expression synthesizable.
 
 newtype Name = Name String
-  deriving (Show, Eq)
+    deriving (Show, Eq)
 
 newtype Message = Message String
-  deriving Show
+    deriving (Show)
 
 failure :: String -> Either Message a
 failure msg = Left (Message msg)
 
-
 freshen :: [Name] -> Name -> Name
 freshen used x
-  | elem x used = freshen used (nextName x)
-  | otherwise   = x
+    | x `elem` used = freshen used (nextName x)
+    | otherwise = x
 
 nextName :: Name -> Name
 nextName (Name x) = Name (x ++ "'")
 
-
-
 data Expr
-  = Var Name
-  | Pi Name Expr Expr
-  | Lambda Name Expr
-  | App Expr Expr
-  | Sigma Name Expr Expr
-  | Cons Expr Expr
-  | Car Expr
-  | Cdr Expr
-  | Nat
-  | Zero
-  | Add1 Expr
-  | IndNat Expr Expr Expr Expr
-  | Equal Expr Expr Expr
-  | Same
-  | Replace Expr Expr Expr
-  | Trivial
-  | Sole
-  | Absurd
-  | IndAbsurd Expr Expr
-  | Atom
-  | Tick String
-  | U
-  | The Expr Expr
-  deriving (Eq, Show)
+    = Var Name
+    | Pi Name Expr Expr
+    | Lambda Name Expr
+    | App Expr Expr
+    | Sigma Name Expr Expr
+    | Cons Expr Expr
+    | Car Expr
+    | Cdr Expr
+    | Nat
+    | Zero
+    | Add1 Expr
+    | IndNat Expr Expr Expr Expr
+    | Equal Expr Expr Expr
+    | Same
+    | Replace Expr Expr Expr
+    | Trivial
+    | Sole
+    | Absurd
+    | IndAbsurd Expr Expr
+    | Atom
+    | Tick String
+    | U
+    | The Expr Expr
+    deriving (Eq, Show)
 
 alphaEquiv :: Expr -> Expr -> Bool
 alphaEquiv e1 e2 = alphaEquivHelper 0 [] e1 [] e2
 
-
-alphaEquivHelper :: Integer ->
-                    [(Name, Integer)] -> Expr ->
-                    [(Name, Integer)] -> Expr ->
-                    Bool
-alphaEquivHelper i ns1 (Var x) ns2 (Var y) =
-  case (lookup x ns1, lookup y ns2) of
-    (Nothing,  Nothing)  -> x == y
-    (Just i,   Just j)   -> i == j
-    _                    -> False
+alphaEquivHelper ::
+    Integer ->
+    [(Name, Integer)] ->
+    Expr ->
+    [(Name, Integer)] ->
+    Expr ->
+    Bool
+alphaEquivHelper _ ns1 (Var x) ns2 (Var y) =
+    case (lookup x ns1, lookup y ns2) of
+        (Nothing, Nothing) -> x == y
+        (Just i, Just j) -> i == j
+        _ -> False
 alphaEquivHelper i ns1 (Pi x a1 r1) ns2 (Pi y a2 r2) =
-  alphaEquivHelper  i        ns1             a1  ns2             a2 &&
-  alphaEquivHelper  (i + 1)  ((x, i) : ns1)  r1  ((y, i) : ns2)  r2
+    alphaEquivHelper i ns1 a1 ns2 a2
+        && alphaEquivHelper (i + 1) ((x, i) : ns1) r1 ((y, i) : ns2) r2
 alphaEquivHelper i ns1 (Lambda x body1) ns2 (Lambda y body2) =
-  alphaEquivHelper (i + 1) ((x, i) : ns1) body1 ((y, i) : ns2) body2
+    alphaEquivHelper (i + 1) ((x, i) : ns1) body1 ((y, i) : ns2) body2
 alphaEquivHelper i ns1 (App rator1 rand1) ns2 (App rator2 rand2) =
-  alphaEquivHelper  i  ns1  rator1  ns2  rator2 &&
-  alphaEquivHelper  i  ns1  rand1   ns2  rand2
+    alphaEquivHelper i ns1 rator1 ns2 rator2
+        && alphaEquivHelper i ns1 rand1 ns2 rand2
 alphaEquivHelper i ns1 (Sigma x a1 d1) ns2 (Sigma y a2 d2) =
-  alphaEquivHelper  i        ns1             a1  ns2             a2 &&
-  alphaEquivHelper  (i + 1)  ((x, i) : ns1)  d1  ((y, i) : ns2)  d2
+    alphaEquivHelper i ns1 a1 ns2 a2
+        && alphaEquivHelper (i + 1) ((x, i) : ns1) d1 ((y, i) : ns2) d2
 alphaEquivHelper i ns1 (Cons car1 cdr1) ns2 (Cons car2 cdr2) =
-  alphaEquivHelper  i  ns1  car1  ns2  car2 &&
-  alphaEquivHelper  i  ns1  cdr1  ns2  cdr2
+    alphaEquivHelper i ns1 car1 ns2 car2
+        && alphaEquivHelper i ns1 cdr1 ns2 cdr2
 alphaEquivHelper i ns1 (Car pair1) ns2 (Car pair2) =
-  alphaEquivHelper  i  ns1  pair1  ns2  pair2
+    alphaEquivHelper i ns1 pair1 ns2 pair2
 alphaEquivHelper i ns1 (Cdr pair1) ns2 (Cdr pair2) =
-  alphaEquivHelper  i  ns1  pair1  ns2  pair2
-alphaEquivHelper  _  _    Nat        _    Nat              = True
-alphaEquivHelper  _  _    Zero       _    Zero             = True
-alphaEquivHelper  i  ns1  (Add1 e1)  ns2  (Add1 e2)        =
-  alphaEquivHelper  i  ns1  e1     ns2  e2
-alphaEquivHelper  i  ns1  (IndNat tgt1 mot1 base1 step1)
-                     ns2  (IndNat tgt2 mot2 base2 step2)   =
-  alphaEquivHelper  i  ns1  tgt1   ns2  tgt2   &&
-  alphaEquivHelper  i  ns1  mot1   ns2  mot2   &&
-  alphaEquivHelper  i  ns1  base1  ns2  base2  &&
-  alphaEquivHelper  i  ns1  step1  ns2  step2
-alphaEquivHelper  i  ns1  (Equal ty1 from1 to1)
-                     ns2  (Equal ty2 from2 to2)            =
-  alphaEquivHelper  i  ns1  ty1    ns2  ty2    &&
-  alphaEquivHelper  i  ns1  from1  ns2  from2  &&
-  alphaEquivHelper  i  ns1  to1    ns2  to2
-alphaEquivHelper  _  _    Same       _    Same             = True
-alphaEquivHelper  i  ns1  (Replace tgt1 mot1 base1)
-                     ns2  (Replace tgt2 mot2 base2)        =
-  alphaEquivHelper  i  ns1  tgt1   ns2  tgt2   &&
-  alphaEquivHelper  i  ns1  mot1   ns2  mot2   &&
-  alphaEquivHelper  i  ns1  base1  ns2  base2
-alphaEquivHelper  _  _    Trivial    _    Trivial          = True
-alphaEquivHelper  _  _    Sole       _    Sole             = True
-alphaEquivHelper  _  _    Absurd     _    Absurd           = True
-alphaEquivHelper  i  ns1  (IndAbsurd tgt1 mot1)
-                     ns2  (IndAbsurd tgt2 mot2)            =
-  alphaEquivHelper  i  ns1  tgt1   ns2  tgt2   &&
-  alphaEquivHelper  i  ns1  mot1   ns2  mot2
-alphaEquivHelper  _  _    Atom        _    Atom            = True
-alphaEquivHelper  _  _    U           _    U               = True
+    alphaEquivHelper i ns1 pair1 ns2 pair2
+alphaEquivHelper _ _ Nat _ Nat = True
+alphaEquivHelper _ _ Zero _ Zero = True
+alphaEquivHelper i ns1 (Add1 e1) ns2 (Add1 e2) =
+    alphaEquivHelper i ns1 e1 ns2 e2
+alphaEquivHelper
+    i
+    ns1
+    (IndNat tgt1 mot1 base1 step1)
+    ns2
+    (IndNat tgt2 mot2 base2 step2) =
+        alphaEquivHelper i ns1 tgt1 ns2 tgt2
+            && alphaEquivHelper i ns1 mot1 ns2 mot2
+            && alphaEquivHelper i ns1 base1 ns2 base2
+            && alphaEquivHelper i ns1 step1 ns2 step2
+alphaEquivHelper
+    i
+    ns1
+    (Equal ty1 from1 to1)
+    ns2
+    (Equal ty2 from2 to2) =
+        alphaEquivHelper i ns1 ty1 ns2 ty2
+            && alphaEquivHelper i ns1 from1 ns2 from2
+            && alphaEquivHelper i ns1 to1 ns2 to2
+alphaEquivHelper _ _ Same _ Same = True
+alphaEquivHelper
+    i
+    ns1
+    (Replace tgt1 mot1 base1)
+    ns2
+    (Replace tgt2 mot2 base2) =
+        alphaEquivHelper i ns1 tgt1 ns2 tgt2
+            && alphaEquivHelper i ns1 mot1 ns2 mot2
+            && alphaEquivHelper i ns1 base1 ns2 base2
+alphaEquivHelper _ _ Trivial _ Trivial = True
+alphaEquivHelper _ _ Sole _ Sole = True
+alphaEquivHelper _ _ Absurd _ Absurd = True
+alphaEquivHelper
+    i
+    ns1
+    (IndAbsurd tgt1 mot1)
+    ns2
+    (IndAbsurd tgt2 mot2) =
+        alphaEquivHelper i ns1 tgt1 ns2 tgt2
+            && alphaEquivHelper i ns1 mot1 ns2 mot2
+alphaEquivHelper _ _ Atom _ Atom = True
+alphaEquivHelper _ _ U _ U = True
 alphaEquivHelper _ _ (Tick a1) _ (Tick a2) = a1 == a2
-alphaEquivHelper  _  _    (The Absurd _)  _    (The Absurd _)  = True
-alphaEquivHelper  i  ns1  (The t1 e1)     ns2  (The t2 e2)     =
-  alphaEquivHelper  i  ns1  t1   ns2  t2   &&
-  alphaEquivHelper  i  ns1  e1   ns2  e2
+alphaEquivHelper _ _ (The Absurd _) _ (The Absurd _) = True
+alphaEquivHelper i ns1 (The t1 e1) ns2 (The t2 e2) =
+    alphaEquivHelper i ns1 t1 ns2 t2
+        && alphaEquivHelper i ns1 e1 ns2 e2
 alphaEquivHelper _ _ _ _ _ = False
 
 data Value
-  = VPi Ty Closure
-  | VLambda Closure
-  | VSigma Ty Closure
-  | VPair Value Value
-  | VNat
-  | VZero
-  | VAdd1 Value
-  | VEq Ty Value Value
-  | VSame
-  | VTrivial
-  | VSole
-  | VAbsurd
-  | VAtom
-  | VTick String
-  | VU
-  | VNeutral Ty Neutral
-  deriving Show
+    = VPi Ty Closure
+    | VLambda Closure
+    | VSigma Ty Closure
+    | VPair Value Value
+    | VNat
+    | VZero
+    | VAdd1 Value
+    | VEq Ty Value Value
+    | VSame
+    | VTrivial
+    | VSole
+    | VAbsurd
+    | VAtom
+    | VTick String
+    | VU
+    | VNeutral Ty Neutral
+    deriving (Show)
 
-
-data Closure = Closure { closureEnv  :: Env
-                       , closureName :: Name
-                       , closureBody :: Expr
-                       }
-  deriving Show
+data Closure = Closure
+    { closureEnv :: Env
+    , closureName :: Name
+    , closureBody :: Expr
+    }
+    deriving (Show)
 
 type Ty = Value
 
-
 newtype Env = Env [(Name, Value)]
-  deriving Show
+    deriving (Show)
 
 extendEnv :: Env -> Name -> Value -> Env
 extendEnv (Env env) x v = Env ((x, v) : env)
 
 evalVar :: Env -> Name -> Value
-evalVar (Env [])             x = error ("Missing value for " ++ show x)
+evalVar (Env []) x = error ("Missing value for " ++ show x)
 evalVar (Env ((y, v) : env)) x
-  | x == y    = v
-  | otherwise = evalVar (Env env) x
-
+    | x == y = v
+    | otherwise = evalVar (Env env) x
 
 data Neutral
-  = NVar Name
-  | NApp Neutral Normal
-  | NCar Neutral
-  | NCdr Neutral
-  | NIndNat Neutral Normal Normal Normal
-  | NReplace Neutral Normal Normal
-  | NIndAbsurd Neutral Normal
-  deriving Show
-
+    = NVar Name
+    | NApp Neutral Normal
+    | NCar Neutral
+    | NCdr Neutral
+    | NIndNat Neutral Normal Normal Normal
+    | NReplace Neutral Normal Normal
+    | NIndAbsurd Neutral Normal
+    deriving (Show)
 
 data Normal = Normal Ty Value
-  deriving Show
-
+    deriving (Show)
 
 data CtxEntry = Def Ty Value | IsA Ty
 
@@ -272,373 +284,397 @@ extendCtx (Ctx ctx) x t = Ctx ((x, IsA t) : ctx)
 define :: Ctx -> Name -> Ty -> Value -> Ctx
 define (Ctx ctx) x t v = Ctx ((x, Def t v) : ctx)
 
-
 lookupType :: Ctx -> Name -> Either Message Ty
-lookupType (Ctx [])             x =
-  failure ("Unbound variable: " ++ show x)
+lookupType (Ctx []) x =
+    failure ("Unbound variable: " ++ show x)
 lookupType (Ctx ((y, e) : ctx)) x
-  | x == y =
-    case e of
-      Def t _ -> return t
-      IsA t   -> return t
-  | otherwise =
-    lookupType (Ctx ctx) x
-
+    | x == y =
+        case e of
+            Def t _ -> return t
+            IsA t -> return t
+    | otherwise =
+        lookupType (Ctx ctx) x
 
 mkEnv :: Ctx -> Env
-mkEnv (Ctx [])             = Env []
+mkEnv (Ctx []) = Env []
 mkEnv (Ctx ((x, e) : ctx)) = Env ((x, v) : env)
   where
     Env env = mkEnv (Ctx ctx)
     v = case e of
-          Def _ v -> v
-          IsA t   -> VNeutral t (NVar x)
-
+        Def _ v -> v
+        IsA t -> VNeutral t (NVar x)
 
 eval :: Env -> Expr -> Value
-eval env (Var x)             = evalVar env x
-eval env (Pi x dom ran)      = VPi (eval env dom) (Closure env x ran)
-eval env (Lambda x body)     = VLambda (Closure env x body)
-eval env (App rator rand)    = doApply (eval env rator) (eval env rand)
+eval env (Var x) = evalVar env x
+eval env (Pi x dom ran) = VPi (eval env dom) (Closure env x ran)
+eval env (Lambda x body) = VLambda (Closure env x body)
+eval env (App rator rand) = doApply (eval env rator) (eval env rand)
 eval env (Sigma x carType cdrType) =
-  VSigma (eval env carType) (Closure env x cdrType)
-eval env (Cons a d)          = VPair (eval env a) (eval env d)
-eval env (Car e)             = doCar (eval env e)
-eval env (Cdr e)             = doCdr (eval env e)
-eval env Nat                 = VNat
-eval env Zero                = VZero
-eval env (Add1 e)            = VAdd1 (eval env e)
+    VSigma (eval env carType) (Closure env x cdrType)
+eval env (Cons a d) = VPair (eval env a) (eval env d)
+eval env (Car e) = doCar (eval env e)
+eval env (Cdr e) = doCdr (eval env e)
+eval _ Nat = VNat
+eval _ Zero = VZero
+eval env (Add1 e) = VAdd1 (eval env e)
 eval env (IndNat tgt mot base step) =
-  doIndNat (eval env tgt) (eval env mot) (eval env base) (eval env step)
-eval env (Equal ty from to)  = VEq (eval env ty) (eval env from) (eval env to)
-eval env Same                = VSame
+    doIndNat (eval env tgt) (eval env mot) (eval env base) (eval env step)
+eval env (Equal ty from to) = VEq (eval env ty) (eval env from) (eval env to)
+eval _ Same = VSame
 eval env (Replace tgt mot base) =
-  doReplace (eval env tgt) (eval env mot) (eval env base)
-eval env Trivial             = VTrivial
-eval env Sole                = VSole
-eval env Absurd              = VAbsurd
+    doReplace (eval env tgt) (eval env mot) (eval env base)
+eval _ Trivial = VTrivial
+eval _ Sole = VSole
+eval _ Absurd = VAbsurd
 eval env (IndAbsurd tgt mot) = doIndAbsurd (eval env tgt) (eval env mot)
-eval env Atom                = VAtom
-eval env (Tick x)            = VTick x
-eval env U                   = VU
-eval env (The ty e)          = eval env e
-
+eval _ Atom = VAtom
+eval _ (Tick x) = VTick x
+eval _ U = VU
+eval env (The _ e) = eval env e
 
 evalClosure :: Closure -> Value -> Value
 evalClosure (Closure env x e) v = eval (extendEnv env x v) e
 
-
 doCar :: Value -> Value
-doCar (VPair v1 v2) = v1
+doCar (VPair v1 _) = v1
 doCar (VNeutral (VSigma aT dT) neu) =
-  VNeutral aT (NCar neu)
+    VNeutral aT (NCar neu)
+doCar _ = error "[Internal Error] not handling pairs"
 
 doCdr :: Value -> Value
-doCdr (VPair v1 v2) = v2
+doCdr (VPair _ v2) = v2
 doCdr v@(VNeutral (VSigma aT dT) neu) =
-  VNeutral (evalClosure dT (doCar v)) (NCdr neu)
-
-
+    VNeutral (evalClosure dT (doCar v)) (NCdr neu)
+doCdr _ = error "[Internal Error] not handling pairs"
 
 doApply :: Value -> Value -> Value
-doApply (VLambda closure)                arg =
-  evalClosure closure arg
-doApply (VNeutral (VPi dom ran) neu)   arg =
-  VNeutral (evalClosure ran arg) (NApp neu (Normal dom arg))
-
+doApply (VLambda closure) arg =
+    evalClosure closure arg
+doApply (VNeutral (VPi dom ran) neu) arg =
+    VNeutral (evalClosure ran arg) (NApp neu (Normal dom arg))
+doApply _ _ = error "[Internal Error] not handling functions"
 
 doIndAbsurd :: Value -> Value -> Value
 doIndAbsurd (VNeutral VAbsurd neu) mot =
-  VNeutral mot (NIndAbsurd neu (Normal VU mot))
-
+    VNeutral mot (NIndAbsurd neu (Normal VU mot))
+doIndAbsurd _ _ = error "[Internal Error] not doing induction on absurd values"
 
 doReplace :: Value -> Value -> Value -> Value
-doReplace VSame                           mot base =
-  base
+doReplace VSame _ base =
+    base
 doReplace (VNeutral (VEq ty from to) neu) mot base =
-  VNeutral (doApply mot to)
-           (NReplace neu (Normal motT mot) (Normal baseT base))
+    VNeutral
+        (doApply mot to)
+        (NReplace neu (Normal motT mot) (Normal baseT base))
   where
-    motT  = VPi ty (Closure (Env []) (Name "x") U)
+    motT = VPi ty (Closure (Env []) (Name "x") U)
     baseT = doApply mot from
-
+doReplace _ _ _ = error "[Internal Error] not replacing equality proofs"
 
 indNatStepType :: Value -> Value
 indNatStepType mot =
-  eval (Env [(Name "mot", mot)])
-    (Pi (Name "n-1") Nat
-      (Pi (Name "almost") (App (Var (Name "mot"))
-                               (Var (Name "n-1")))
-        (App (Var (Name "mot"))
-             (Add1 (Var (Name "n-1"))))))
-
+    eval
+        (Env [(Name "mot", mot)])
+        ( Pi
+            (Name "n-1")
+            Nat
+            ( Pi
+                (Name "almost")
+                ( App
+                    (Var (Name "mot"))
+                    (Var (Name "n-1"))
+                )
+                ( App
+                    (Var (Name "mot"))
+                    (Add1 (Var (Name "n-1")))
+                )
+            )
+        )
 
 doIndNat :: Value -> Value -> Value -> Value -> Value
-doIndNat VZero                   mot base step =
-  base
-doIndNat (VAdd1 v)               mot base step =
-  doApply (doApply step v) (doIndNat v mot base step)
+doIndNat VZero _ base _ =
+    base
+doIndNat (VAdd1 v) mot base step =
+    doApply (doApply step v) (doIndNat v mot base step)
 doIndNat tgt@(VNeutral VNat neu) mot base step =
-  VNeutral (doApply mot tgt)
-    (NIndNat neu
-      (Normal (VPi VNat (Closure (Env []) (Name "k") U)) mot)
-      (Normal (doApply mot VZero) base)
-      (Normal (indNatStepType mot) step))
-
+    VNeutral
+        (doApply mot tgt)
+        ( NIndNat
+            neu
+            (Normal (VPi VNat (Closure (Env []) (Name "k") U)) mot)
+            (Normal (doApply mot VZero) base)
+            (Normal (indNatStepType mot) step)
+        )
+doIndNat _ _ _ _ = error "[Internal Error] not doing induction on natural numbers"
 
 readBackNormal :: Ctx -> Normal -> Expr
 readBackNormal ctx (Normal t v) = readBackTyped ctx t v
 
 readBackTyped :: Ctx -> Ty -> Value -> Expr
-readBackTyped ctx VNat VZero = Zero
+readBackTyped _ VNat VZero = Zero
 readBackTyped ctx VNat (VAdd1 v) = Add1 (readBackTyped ctx VNat v)
 readBackTyped ctx (VPi dom ran) fun =
-  Lambda x
-    (readBackTyped
-       (extendCtx ctx x dom)
-       (evalClosure ran xVal)
-       (doApply fun xVal))
+    Lambda
+        x
+        ( readBackTyped
+            (extendCtx ctx x dom)
+            (evalClosure ran xVal)
+            (doApply fun xVal)
+        )
   where
-    x    = freshen (ctxNames ctx) (closureName ran)
+    x = freshen (ctxNames ctx) (closureName ran)
     xVal = VNeutral dom (NVar x)
 readBackTyped ctx (VSigma aT dT) pair =
-  Cons (readBackTyped ctx aT carVal)
-       (readBackTyped ctx (evalClosure dT carVal) cdrVal)
+    Cons
+        (readBackTyped ctx aT carVal)
+        (readBackTyped ctx (evalClosure dT carVal) cdrVal)
   where
     carVal = doCar pair
     cdrVal = doCdr pair
-readBackTyped ctx VTrivial val = Sole
+readBackTyped _ VTrivial _ = Sole
 readBackTyped ctx VAbsurd (VNeutral VAbsurd neu) =
-  The Absurd (readBackNeutral ctx neu)
-readBackTyped ctx (VEq _ _ _) VSame = Same
-readBackTyped ctx VAtom (VTick x) = Tick x
-readBackTyped ctx VU VNat = Nat
-readBackTyped ctx VU VAtom = Atom
-readBackTyped ctx VU VTrivial = Trivial
-readBackTyped ctx VU VAbsurd = Absurd
+    The Absurd (readBackNeutral ctx neu)
+readBackTyped _ VEq{} VSame = Same
+readBackTyped _ VAtom (VTick x) = Tick x
+readBackTyped _ VU VNat = Nat
+readBackTyped _ VU VAtom = Atom
+readBackTyped _ VU VTrivial = Trivial
+readBackTyped _ VU VAbsurd = Absurd
 readBackTyped ctx VU (VEq t from to) =
-  Equal (readBackTyped ctx VU t)
+    Equal
+        (readBackTyped ctx VU t)
         (readBackTyped ctx t from)
         (readBackTyped ctx t to)
 readBackTyped ctx VU (VSigma aT dT) = Sigma x a d
   where
     x = freshen (ctxNames ctx) (closureName dT)
     a = readBackTyped ctx VU aT
-    d = readBackTyped (extendCtx ctx x aT)
+    d =
+        readBackTyped
+            (extendCtx ctx x aT)
             VU
             (evalClosure dT (VNeutral aT (NVar x)))
 readBackTyped ctx VU (VPi aT bT) = Pi x a b
   where
     x = freshen (ctxNames ctx) (closureName bT)
     a = readBackTyped ctx VU aT
-    b = readBackTyped (extendCtx ctx x aT)
-          VU
-          (evalClosure bT (VNeutral aT (NVar x)))
-readBackTyped ctx VU VU = U
-readBackTyped ctx t (VNeutral t' neu) =
-  readBackNeutral ctx neu
-readBackTyped _ otherT otherE = error $ (show otherT) ++ show otherE
+    b =
+        readBackTyped
+            (extendCtx ctx x aT)
+            VU
+            (evalClosure bT (VNeutral aT (NVar x)))
+readBackTyped _ VU VU = U
+readBackTyped ctx _ (VNeutral _ neu) =
+    readBackNeutral ctx neu
+readBackTyped _ otherT otherE = error $ show otherT ++ show otherE
 
 readBackNeutral :: Ctx -> Neutral -> Expr
-readBackNeutral ctx (NVar x) = Var x
+readBackNeutral _ (NVar x) = Var x
 readBackNeutral ctx (NApp neu arg) =
-  App (readBackNeutral ctx neu) (readBackNormal ctx arg)
+    App (readBackNeutral ctx neu) (readBackNormal ctx arg)
 readBackNeutral ctx (NCar neu) = Car (readBackNeutral ctx neu)
 readBackNeutral ctx (NCdr neu) = Cdr (readBackNeutral ctx neu)
 readBackNeutral ctx (NIndNat neu mot base step) =
-  IndNat (readBackNeutral ctx neu)
-         (readBackNormal ctx mot)
-         (readBackNormal ctx base)
-         (readBackNormal ctx step)
+    IndNat
+        (readBackNeutral ctx neu)
+        (readBackNormal ctx mot)
+        (readBackNormal ctx base)
+        (readBackNormal ctx step)
 readBackNeutral ctx (NReplace neu mot base) =
-  Replace (readBackNeutral ctx neu)
-          (readBackNormal ctx mot)
-          (readBackNormal ctx base)
+    Replace
+        (readBackNeutral ctx neu)
+        (readBackNormal ctx mot)
+        (readBackNormal ctx base)
 readBackNeutral ctx (NIndAbsurd neu mot) =
-  IndAbsurd
-    (The Absurd (readBackNeutral ctx neu))
-    (readBackNormal ctx mot)
-
+    IndAbsurd
+        (The Absurd (readBackNeutral ctx neu))
+        (readBackNormal ctx mot)
 
 synth :: Ctx -> Expr -> Either Message Ty
-synth ctx (Var x) =
-  do t <- lookupType ctx x
-     return t
+synth ctx (Var x) = lookupType ctx x
 synth ctx (Pi x a b) =
-  do check ctx a VU
-     check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
-     return VU
+    do
+        check ctx a VU
+        check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
+        return VU
 synth ctx (App rator rand) =
-  do funTy <- synth ctx rator
-     (a, b) <- isPi ctx funTy
-     check ctx rand a
-     return (evalClosure b (eval (mkEnv ctx) rand))
+    do
+        funTy <- synth ctx rator
+        (a, b) <- isPi ctx funTy
+        check ctx rand a
+        return (evalClosure b (eval (mkEnv ctx) rand))
 synth ctx (Sigma x a b) =
-  do check ctx a VU
-     check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
-     return VU
+    do
+        check ctx a VU
+        check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
+        return VU
 synth ctx (Car e) =
-  do t <- synth ctx e
-     (aT, dT) <- isSigma ctx t
-     return aT
+    do
+        t <- synth ctx e
+        (aT, _) <- isSigma ctx t
+        return aT
 synth ctx (Cdr e) =
-  do t <- synth ctx e
-     (aT, dT) <- isSigma ctx t
-     return (evalClosure dT (doCar (eval (mkEnv ctx) e)))
-synth ctx Nat = return VU
+    do
+        t <- synth ctx e
+        (_, dT) <- isSigma ctx t
+        return (evalClosure dT (doCar (eval (mkEnv ctx) e)))
+synth _ Nat = return VU
 synth ctx (IndNat tgt mot base step) =
-  do t <- synth ctx tgt
-     isNat ctx t
-     let tgtV  = eval (mkEnv ctx) tgt
-         motTy = eval (Env []) (Pi (Name "x") Nat U)
-     check ctx mot motTy
-     let motV = eval (mkEnv ctx) mot
-     check ctx base (doApply motV VZero)
-     check ctx step (indNatStepType motV)
-     return (doApply motV tgtV)
+    do
+        t <- synth ctx tgt
+        isNat ctx t
+        let tgtV = eval (mkEnv ctx) tgt
+            motTy = eval (Env []) (Pi (Name "x") Nat U)
+        check ctx mot motTy
+        let motV = eval (mkEnv ctx) mot
+        check ctx base (doApply motV VZero)
+        check ctx step (indNatStepType motV)
+        return (doApply motV tgtV)
 synth ctx (Equal ty from to) =
-  do check ctx ty VU
-     let tyV = eval (mkEnv ctx) ty
-     check ctx from tyV
-     check ctx to tyV
-     return VU
+    do
+        check ctx ty VU
+        let tyV = eval (mkEnv ctx) ty
+        check ctx from tyV
+        check ctx to tyV
+        return VU
 synth ctx (Replace tgt mot base) =
-  do t <- synth ctx tgt
-     (ty, from, to) <- isEqual ctx t
-     let motTy  =  eval (Env [(Name "ty", ty)]) (Pi (Name "x") (Var (Name "ty")) U)
-     check ctx mot motTy
-     let motV = eval (mkEnv ctx) mot
-     check ctx base (doApply motV from)
-     return (doApply motV to)
-synth ctx Trivial = return VU
-synth ctx Absurd = return VU
+    do
+        t <- synth ctx tgt
+        (ty, from, to) <- isEqual ctx t
+        let motTy = eval (Env [(Name "ty", ty)]) (Pi (Name "x") (Var (Name "ty")) U)
+        check ctx mot motTy
+        let motV = eval (mkEnv ctx) mot
+        check ctx base (doApply motV from)
+        return (doApply motV to)
+synth _ Trivial = return VU
+synth _ Absurd = return VU
 synth ctx (IndAbsurd tgt mot) =
-  do t <- synth ctx tgt
-     isAbsurd ctx t
-     check ctx mot VU
-     return (eval (mkEnv ctx) mot)
-synth ctx Atom = return VU
-synth ctx U = return VU
+    do
+        t <- synth ctx tgt
+        isAbsurd ctx t
+        check ctx mot VU
+        return (eval (mkEnv ctx) mot)
+synth _ Atom = return VU
+synth _ U = return VU
 synth ctx (The ty expr) =
-  do check ctx ty VU
-     let tyV = eval (mkEnv ctx) ty
-     check ctx expr tyV
-     return tyV
-synth ctx other =
-  failure ("Unable to synthesize a type for " ++ show other)
-
+    do
+        check ctx ty VU
+        let tyV = eval (mkEnv ctx) ty
+        check ctx expr tyV
+        return tyV
+synth _ other =
+    failure ("Unable to synthesize a type for " ++ show other)
 
 check :: Ctx -> Expr -> Ty -> Either Message ()
 check ctx (Lambda x body) t =
-  do (a, b) <- isPi ctx t
-     let xV = evalClosure b (VNeutral a (NVar x))
-     check (extendCtx ctx x a) body xV
+    do
+        (a, b) <- isPi ctx t
+        let xV = evalClosure b (VNeutral a (NVar x))
+        check (extendCtx ctx x a) body xV
 check ctx (Cons a d) t =
-  do (aT, dT) <- isSigma ctx t
-     check ctx a aT
-     let aV = eval (mkEnv ctx) a
-     check ctx d (evalClosure dT aV)
+    do
+        (aT, dT) <- isSigma ctx t
+        check ctx a aT
+        let aV = eval (mkEnv ctx) a
+        check ctx d (evalClosure dT aV)
 check ctx Zero t =
-  isNat ctx t
+    isNat ctx t
 check ctx (Add1 n) t =
-  do isNat ctx t
-     check ctx n VNat
+    do
+        isNat ctx t
+        check ctx n VNat
 check ctx Same t =
-  do (t, from, to) <- isEqual ctx t
-     convert ctx t from to
+    do
+        (t, from, to) <- isEqual ctx t
+        convert ctx t from to
 check ctx Sole t =
-  isTrivial ctx t
-check ctx (Tick a) t=
-  isAtom ctx t
+    isTrivial ctx t
+check ctx (Tick _) t =
+    isAtom ctx t
 check ctx other t =
-  do t' <- synth ctx other
-     convert ctx VU t' t
-
+    do
+        t' <- synth ctx other
+        convert ctx VU t' t
 
 convert :: Ctx -> Ty -> Value -> Value -> Either Message ()
 convert ctx t v1 v2 =
-  if alphaEquiv e1 e2
-    then return ()
-    else failure (show e1 ++ " is not the same as " ++ show e2)
+    if alphaEquiv e1 e2
+        then return ()
+        else failure (show e1 ++ " is not the same as " ++ show e2)
   where
-     e1 = readBackTyped ctx t v1
-     e2 = readBackTyped ctx t v2
-
+    e1 = readBackTyped ctx t v1
+    e2 = readBackTyped ctx t v2
 
 unexpected :: Ctx -> String -> Value -> Either Message a
 unexpected ctx msg t = failure (msg ++ ": " ++ show e)
   where
     e = readBackTyped ctx VU t
 
-
 isPi :: Ctx -> Value -> Either Message (Ty, Closure)
-isPi _   (VPi a b) = return (a, b)
-isPi ctx other     = unexpected ctx "Not a Pi type" other
-
+isPi _ (VPi a b) = return (a, b)
+isPi ctx other = unexpected ctx "Not a Pi type" other
 
 isSigma :: Ctx -> Value -> Either Message (Ty, Closure)
-isSigma _   (VSigma a b) = return (a, b)
-isSigma ctx other        = unexpected ctx "Not a Sigma type" other
-
+isSigma _ (VSigma a b) = return (a, b)
+isSigma ctx other = unexpected ctx "Not a Sigma type" other
 
 isNat :: Ctx -> Value -> Either Message ()
-isNat _   VNat  = return ()
+isNat _ VNat = return ()
 isNat ctx other = unexpected ctx "Not Nat" other
 
-
 isEqual :: Ctx -> Value -> Either Message (Ty, Value, Value)
-isEqual _   (VEq ty from to) = return (ty, from, to)
-isEqual ctx other            = unexpected ctx "Not an equality type" other
-
+isEqual _ (VEq ty from to) = return (ty, from, to)
+isEqual ctx other = unexpected ctx "Not an equality type" other
 
 isAbsurd :: Ctx -> Value -> Either Message ()
-isAbsurd _   VAbsurd = return ()
-isAbsurd ctx other   = unexpected ctx "Not Absurd: " other
+isAbsurd _ VAbsurd = return ()
+isAbsurd ctx other = unexpected ctx "Not Absurd: " other
 
 isTrivial :: Ctx -> Value -> Either Message ()
-isTrivial _   VTrivial = return ()
-isTrivial ctx other    = unexpected ctx "Not Trivial" other
-
+isTrivial _ VTrivial = return ()
+isTrivial ctx other = unexpected ctx "Not Trivial" other
 
 isAtom :: Ctx -> Value -> Either Message ()
-isAtom _   VAtom = return ()
+isAtom _ VAtom = return ()
 isAtom ctx other = unexpected ctx "Not Atom" other
-
 
 data Toplevel = Define Name Expr | Example Expr
 
-data Output = ExampleOutput Expr
-  deriving (Eq, Show)
-
+newtype Output = ExampleOutput Expr
+    deriving (Eq, Show)
 
 toplevel :: Ctx -> Toplevel -> Either Message ([Output], Ctx)
 toplevel ctx (Define x e) =
-  case lookupType ctx x of
-    Right  _  -> failure ("The name " ++ show x ++ " is already defined.")
-    Left   _  ->
-      do  t <- synth ctx e
-          let v = eval (mkEnv ctx) e
-          return ([], define ctx x t v)
+    case lookupType ctx x of
+        Right _ -> failure ("The name " ++ show x ++ " is already defined.")
+        Left _ ->
+            do
+                t <- synth ctx e
+                let v = eval (mkEnv ctx) e
+                return ([], define ctx x t v)
 toplevel ctx (Example e) =
-  do  t <- synth ctx e
-      let  v   =  eval (mkEnv ctx) e
-           e'  =  readBackTyped ctx t v
-           t'  =  readBackTyped ctx VU t
-      return ([ExampleOutput (The t' e')], ctx)
+    do
+        t <- synth ctx e
+        let v = eval (mkEnv ctx) e
+            e' = readBackTyped ctx t v
+            t' = readBackTyped ctx VU t
+        return ([ExampleOutput (The t' e')], ctx)
 
 processFile :: [Toplevel] -> Either Message ([Output], Ctx)
-processFile decls = process' initCtx decls
+processFile = process' initCtx
   where
     process' ctx [] = Right ([], ctx)
-    process' ctx (t:ts) =
-      do (out, ctx') <- toplevel ctx t
-         (moreOut, ctx'') <- process' ctx' ts
-         return (out ++ moreOut, ctx'')
+    process' ctx (t : ts) =
+        do
+            (out, ctx') <- toplevel ctx t
+            (moreOut, ctx'') <- process' ctx' ts
+            return (out ++ moreOut, ctx'')
 
 testfile :: [Toplevel] -> Either Message [Output]
 testfile decls =
-  do (out, _) <- processFile decls
-     return out
+    do
+        (out, _) <- processFile decls
+        return out
 
 evenOddProgram :: [Toplevel]
 evenOddProgram =
@@ -679,6 +715,4 @@ evenOddProgram =
   -- , Example (App (Var (Name "even-or-odd")) (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero)))))
   ]
 
-
 main = return ()
-
