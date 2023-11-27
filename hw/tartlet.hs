@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -W #-}
 
 module Main where
+import Data.Foldable (for_)
 
 -- This file is a type checker for a smaller relative of Pie, called Tartlet.
 --
@@ -191,7 +192,7 @@ alphaEquivHelper _ _ (The Absurd _) _ (The Absurd _) = True
 alphaEquivHelper i ns1 (The t1 e1) ns2 (The t2 e2) =
     alphaEquivHelper i ns1 t1 ns2 t2 && alphaEquivHelper i ns1 e1 ns2 e2
 alphaEquivHelper i ns1 (Either t11 t12) ns2 (Either t21 t22) =
-    alphaEquivHelper i ns1 t11 ns2 t12 && alphaEquivHelper i ns1 t21 ns2 t22
+    alphaEquivHelper i ns1 t11 ns2 t21 && alphaEquivHelper i ns1 t12 ns2 t22
 alphaEquivHelper i ns1 (Lft e1) ns2 (Lft e2) = alphaEquivHelper i ns1 e1 ns2 e2
 alphaEquivHelper i ns1 (Rght e1) ns2 (Rght e2) = alphaEquivHelper i ns1 e1 ns2 e2
 alphaEquivHelper i ns1 (IndEither tgt1 mot1 ell1 are1) ns2 (IndEither tgt2 mot2 ell2 are2) =
@@ -581,13 +582,13 @@ synth ctx (IndEither tgt mot ell are) = do
     tyTgt <- synth ctx tgt
     (tyA, tyB) <- isEither ctx tyTgt
     let motTy = eval (Env [(Name "ty", tyTgt)]) (Pi (Name "e") (Var (Name "ty")) U)
-        ellTy = eval (Env [(Name "A", tyA)]) (Pi (Name "a") (Var (Name "A")) (App mot (Lft (Var (Name "a")))))
-        areTy = eval (Env [(Name "B", tyB)]) (Pi (Name "b") (Var (Name "B")) (App mot (Rght (Var (Name "b")))))
+        motV = eval (mkEnv ctx) mot
+        ellTy = eval (Env [(Name "mot", motV), (Name "A", tyA)]) (Pi (Name "a") (Var (Name "A")) (App (var "mot") (Lft (var "a"))))
+        areTy = eval (Env [(Name "mot", motV), (Name "B", tyB)]) (Pi (Name "b") (Var (Name "B")) (App (var "mot") (Rght (var "b"))))
     check ctx mot motTy
     check ctx ell ellTy
     check ctx are areTy
-    let motV = eval (mkEnv ctx) mot
-        tgtV = eval (mkEnv ctx) tgt
+    let tgtV = eval (mkEnv ctx) tgt
     return (doApply motV tgtV)
 synth _ other =
     failure ("Unable to synthesize a type for " ++ show other)
@@ -711,6 +712,13 @@ testfile decls =
         (out, _) <- processFile decls
         return out
 
+(@@) :: Expr -> Expr -> Expr
+(@@) = App
+infixl 5 @@
+
+var :: String -> Expr
+var s = Var (Name s)
+
 evenOddProgram :: [Toplevel]
 evenOddProgram =
     [ Define
@@ -740,7 +748,7 @@ evenOddProgram =
                         Nat
                         (Var (Name "n"))
                         (App (Var (Name "double")) (Var (Name "half")))))))
-    , Example (App (Var (Name "Even")) Zero)
+    -- , Example (App (Var (Name "Even")) Zero)
     , Define
         (Name "Odd")
         (The
@@ -753,7 +761,15 @@ evenOddProgram =
                         Nat
                         (Var (Name "n"))
                         (Add1 (App (Var (Name "double")) (Var (Name "half"))))))))
-    , Example (App (Var (Name "Odd")) (Add1 Zero))
+    -- , Example (App (Var (Name "Odd")) (Add1 Zero))
+
+    , Define
+        (Name "zero-is-even")
+        (The
+            (App (Var (Name "Even")) Zero)
+            (Cons Zero Same))
+    , Example (Var (Name "zero-is-even"))
+
     , Define
         (Name "cong")
         ( The
@@ -818,11 +834,83 @@ evenOddProgram =
             )
         )
 
+    , Define
+        (Name "add1-even->odd") -- page 273
+        (The
+            (Pi (Name "n") Nat
+                (Pi (Name "x") (var "Even" @@ var "n")
+                    (var "Odd" @@ Add1 (var "n"))))
+            (Lambda (Name "n")
+                (Lambda (Name "en")
+                        (Cons
+                            (Car (var "en"))
+                            (var "cong"
+                                @@ Nat
+                                @@ Nat
+                                @@ var "n"
+                                @@ (var "double" @@ Car (var "en"))
+                                @@ Cdr (var "en")
+                                @@ Lambda (Name "n") (Add1 (var "n")))))))
+    , Example (Var (Name "add1-even->odd"))
+
+    , Define
+        (Name "add1-odd->even")
+        (The
+            (Pi (Name "n") Nat
+                (Pi (Name "x") (var "Odd" @@ var "n")
+                    (var "Even" @@ Add1 (var "n"))))
+            (Lambda (Name "n")
+                (Lambda (Name "on")
+                        (Cons
+                            (Add1 (Car (var "on")))
+                            (var "cong"
+                                @@ Nat
+                                @@ Nat
+                                @@ var "n"
+                                @@ Add1 (var "double" @@ Car (var "on"))
+                                @@ Cdr (var "on")
+                                @@ Lambda (Name "n") (Add1 (var "n")))))))
+    , Example (Var (Name "add1-odd->even"))
+
+    -- , Define
+    --     (Name "Odd")
+    --     (The
+    --         (Pi (Name "x") Nat U)
+    --         (Lambda
+    --             (Name "n")
+    --             (Sigma
+    --                 (Name "half") Nat
+    --                 (Equal
+    --                     Nat
+    --                     (Var (Name "n"))
+    --                     (Add1 (App (Var (Name "double")) (Var (Name "half"))))))))
+
+    , Define
+        (Name "even-or-odd")
+        (The
+            (Pi (Name "n") Nat
+                (Either (var "Even" @@ var "n") (var "Odd" @@ var "n")))
+            (Lambda (Name "n")
+                (IndNat (var "n")
+                    (Lambda (Name "n") $ Either (var "Even" @@ var "n") (var "Odd" @@ var "n"))
+                    (Lft (var "zero-is-even"))
+                    (Lambda (Name "m")
+                        $ Lambda (Name "eo")
+                        $ IndEither (var "eo") (Lambda (Name "k") $ Either (var "Even" @@ Add1 (var "m")) (var "Odd" @@ Add1 (var "m")))
+                            (Lambda (Name "en") $ Rght $ var "add1-even->odd" @@ var "m" @@ var "en")
+                            (Lambda (Name "on") $ Lft $ var "add1-odd->even" @@ var "m" @@ var "on"))))
+        )
+        -- , Example (Var (Name "even-or-odd"))
 
         -- You can use these examples to check whether your proof that all
         -- numbers are even or odd returns the expected results.
-        -- , Example (App (Var (Name "even-or-odd")) (Add1 (Add1 (Add1 Zero))))
-        -- , Example (App (Var (Name "even-or-odd")) (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero)))))
+        , Example (App (Var (Name "even-or-odd")) (Add1 (Add1 (Add1 Zero))))
+        , Example (App (Var (Name "even-or-odd")) (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero)))))
     ]
 
-main = return ()
+main :: IO ()
+main = do
+    case testfile evenOddProgram of
+        Left err -> print err
+        Right r -> for_ r print
+
