@@ -872,19 +872,6 @@ evenOddProgram =
                                 @@ Lambda (Name "n") (Add1 (var "n")))))))
     , Example (Var (Name "add1-odd->even"))
 
-    -- , Define
-    --     (Name "Odd")
-    --     (The
-    --         (Pi (Name "x") Nat U)
-    --         (Lambda
-    --             (Name "n")
-    --             (Sigma
-    --                 (Name "half") Nat
-    --                 (Equal
-    --                     Nat
-    --                     (Var (Name "n"))
-    --                     (Add1 (App (Var (Name "double")) (Var (Name "half"))))))))
-
     , Define
         (Name "even-or-odd")
         (The
