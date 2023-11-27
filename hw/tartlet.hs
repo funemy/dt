@@ -127,18 +127,16 @@ data Expr
     | Tick String
     | U
     | The Expr Expr
+    | Either Expr Expr
+    | Lft Expr
+    | Rght Expr
+    | IndEither Expr Expr Expr Expr
     deriving (Eq, Show)
 
 alphaEquiv :: Expr -> Expr -> Bool
 alphaEquiv e1 e2 = alphaEquivHelper 0 [] e1 [] e2
 
-alphaEquivHelper ::
-    Integer ->
-    [(Name, Integer)] ->
-    Expr ->
-    [(Name, Integer)] ->
-    Expr ->
-    Bool
+alphaEquivHelper :: Integer -> [(Name, Integer)] -> Expr -> [(Name, Integer)] -> Expr -> Bool
 alphaEquivHelper _ ns1 (Var x) ns2 (Var y) =
     case (lookup x ns1, lookup y ns2) of
         (Nothing, Nothing) -> x == y
@@ -166,53 +164,41 @@ alphaEquivHelper _ _ Nat _ Nat = True
 alphaEquivHelper _ _ Zero _ Zero = True
 alphaEquivHelper i ns1 (Add1 e1) ns2 (Add1 e2) =
     alphaEquivHelper i ns1 e1 ns2 e2
-alphaEquivHelper
-    i
-    ns1
-    (IndNat tgt1 mot1 base1 step1)
-    ns2
-    (IndNat tgt2 mot2 base2 step2) =
-        alphaEquivHelper i ns1 tgt1 ns2 tgt2
-            && alphaEquivHelper i ns1 mot1 ns2 mot2
-            && alphaEquivHelper i ns1 base1 ns2 base2
-            && alphaEquivHelper i ns1 step1 ns2 step2
-alphaEquivHelper
-    i
-    ns1
-    (Equal ty1 from1 to1)
-    ns2
-    (Equal ty2 from2 to2) =
-        alphaEquivHelper i ns1 ty1 ns2 ty2
-            && alphaEquivHelper i ns1 from1 ns2 from2
-            && alphaEquivHelper i ns1 to1 ns2 to2
+alphaEquivHelper i ns1 (IndNat tgt1 mot1 base1 step1) ns2 (IndNat tgt2 mot2 base2 step2) =
+    alphaEquivHelper i ns1 tgt1 ns2 tgt2
+        && alphaEquivHelper i ns1 mot1 ns2 mot2
+        && alphaEquivHelper i ns1 base1 ns2 base2
+        && alphaEquivHelper i ns1 step1 ns2 step2
+alphaEquivHelper i ns1 (Equal ty1 from1 to1) ns2 (Equal ty2 from2 to2) =
+    alphaEquivHelper i ns1 ty1 ns2 ty2
+        && alphaEquivHelper i ns1 from1 ns2 from2
+        && alphaEquivHelper i ns1 to1 ns2 to2
 alphaEquivHelper _ _ Same _ Same = True
-alphaEquivHelper
-    i
-    ns1
-    (Replace tgt1 mot1 base1)
-    ns2
-    (Replace tgt2 mot2 base2) =
-        alphaEquivHelper i ns1 tgt1 ns2 tgt2
-            && alphaEquivHelper i ns1 mot1 ns2 mot2
-            && alphaEquivHelper i ns1 base1 ns2 base2
+alphaEquivHelper i ns1 (Replace tgt1 mot1 base1) ns2 (Replace tgt2 mot2 base2) =
+    alphaEquivHelper i ns1 tgt1 ns2 tgt2
+        && alphaEquivHelper i ns1 mot1 ns2 mot2
+        && alphaEquivHelper i ns1 base1 ns2 base2
 alphaEquivHelper _ _ Trivial _ Trivial = True
 alphaEquivHelper _ _ Sole _ Sole = True
 alphaEquivHelper _ _ Absurd _ Absurd = True
-alphaEquivHelper
-    i
-    ns1
-    (IndAbsurd tgt1 mot1)
-    ns2
-    (IndAbsurd tgt2 mot2) =
-        alphaEquivHelper i ns1 tgt1 ns2 tgt2
-            && alphaEquivHelper i ns1 mot1 ns2 mot2
+alphaEquivHelper i ns1 (IndAbsurd tgt1 mot1) ns2 (IndAbsurd tgt2 mot2) =
+    alphaEquivHelper i ns1 tgt1 ns2 tgt2
+        && alphaEquivHelper i ns1 mot1 ns2 mot2
 alphaEquivHelper _ _ Atom _ Atom = True
 alphaEquivHelper _ _ U _ U = True
 alphaEquivHelper _ _ (Tick a1) _ (Tick a2) = a1 == a2
 alphaEquivHelper _ _ (The Absurd _) _ (The Absurd _) = True
 alphaEquivHelper i ns1 (The t1 e1) ns2 (The t2 e2) =
-    alphaEquivHelper i ns1 t1 ns2 t2
-        && alphaEquivHelper i ns1 e1 ns2 e2
+    alphaEquivHelper i ns1 t1 ns2 t2 && alphaEquivHelper i ns1 e1 ns2 e2
+alphaEquivHelper i ns1 (Either t11 t12) ns2 (Either t21 t22) =
+    alphaEquivHelper i ns1 t11 ns2 t12 && alphaEquivHelper i ns1 t21 ns2 t22
+alphaEquivHelper i ns1 (Lft e1) ns2 (Lft e2) = alphaEquivHelper i ns1 e1 ns2 e2
+alphaEquivHelper i ns1 (Rght e1) ns2 (Rght e2) = alphaEquivHelper i ns1 e1 ns2 e2
+alphaEquivHelper i ns1 (IndEither tgt1 mot1 ell1 are1) ns2 (IndEither tgt2 mot2 ell2 are2) =
+    alphaEquivHelper i ns1 tgt1 ns2 tgt2
+        && alphaEquivHelper i ns1 mot1 ns2 mot2
+        && alphaEquivHelper i ns1 ell1 ns2 ell2
+        && alphaEquivHelper i ns1 are1 ns2 are2
 alphaEquivHelper _ _ _ _ _ = False
 
 data Value
@@ -232,6 +218,9 @@ data Value
     | VTick String
     | VU
     | VNeutral Ty Neutral
+    | VEither Ty Ty
+    | VLft Value
+    | VRght Value
     deriving (Show)
 
 data Closure = Closure
@@ -263,6 +252,7 @@ data Neutral
     | NIndNat Neutral Normal Normal Normal
     | NReplace Neutral Normal Normal
     | NIndAbsurd Neutral Normal
+    | NIndEither Neutral Normal Normal Normal
     deriving (Show)
 
 data Normal = Normal Ty Value
@@ -331,19 +321,26 @@ eval _ Atom = VAtom
 eval _ (Tick x) = VTick x
 eval _ U = VU
 eval env (The _ e) = eval env e
+eval env (Either e1 e2) =
+    let tyA = eval env e1
+        tyB = eval env e2
+     in VEither tyA tyB
+eval env (Lft e) = VLft (eval env e)
+eval env (Rght e) = VRght (eval env e)
+eval env (IndEither tgt mot ell are) = doIndEither (eval env tgt) (eval env mot) (eval env ell) (eval env are)
 
 evalClosure :: Closure -> Value -> Value
 evalClosure (Closure env x e) v = eval (extendEnv env x v) e
 
 doCar :: Value -> Value
 doCar (VPair v1 _) = v1
-doCar (VNeutral (VSigma aT dT) neu) =
+doCar (VNeutral (VSigma aT _) neu) =
     VNeutral aT (NCar neu)
 doCar _ = error "[Internal Error] not handling pairs"
 
 doCdr :: Value -> Value
 doCdr (VPair _ v2) = v2
-doCdr v@(VNeutral (VSigma aT dT) neu) =
+doCdr v@(VNeutral (VSigma _ dT) neu) =
     VNeutral (evalClosure dT (doCar v)) (NCdr neu)
 doCdr _ = error "[Internal Error] not handling pairs"
 
@@ -407,6 +404,11 @@ doIndNat tgt@(VNeutral VNat neu) mot base step =
         )
 doIndNat _ _ _ _ = error "[Internal Error] not doing induction on natural numbers"
 
+doIndEither :: Value -> Value -> Value -> Value -> Value
+doIndEither (VLft v) _ ell _ = doApply ell v
+doIndEither (VRght v) _ _ are = doApply are v
+doIndEither _ _ _ _ = error "[Internal Error] not doing induction on value of Either type"
+
 readBackNormal :: Ctx -> Normal -> Expr
 readBackNormal ctx (Normal t v) = readBackTyped ctx t v
 
@@ -466,6 +468,10 @@ readBackTyped ctx VU (VPi aT bT) = Pi x a b
 readBackTyped _ VU VU = U
 readBackTyped ctx _ (VNeutral _ neu) =
     readBackNeutral ctx neu
+readBackTyped ctx VU (VEither tyA tyB) =
+    Either (readBackTyped ctx VU tyA) (readBackTyped ctx VU tyB)
+readBackTyped ctx (VEither tyA _) (VLft a) = Lft (readBackTyped ctx tyA a)
+readBackTyped ctx (VEither _ tyB) (VRght b) = Rght (readBackTyped ctx tyB b)
 readBackTyped _ otherT otherE = error $ show otherT ++ show otherE
 
 readBackNeutral :: Ctx -> Neutral -> Expr
@@ -489,112 +495,137 @@ readBackNeutral ctx (NIndAbsurd neu mot) =
     IndAbsurd
         (The Absurd (readBackNeutral ctx neu))
         (readBackNormal ctx mot)
+readBackNeutral ctx (NIndEither neu mot ell are) =
+    IndEither
+        (readBackNeutral ctx neu)
+        (readBackNormal ctx mot)
+        (readBackNormal ctx ell)
+        (readBackNormal ctx are)
 
 synth :: Ctx -> Expr -> Either Message Ty
 synth ctx (Var x) = lookupType ctx x
-synth ctx (Pi x a b) =
-    do
-        check ctx a VU
-        check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
-        return VU
-synth ctx (App rator rand) =
-    do
-        funTy <- synth ctx rator
-        (a, b) <- isPi ctx funTy
-        check ctx rand a
-        return (evalClosure b (eval (mkEnv ctx) rand))
-synth ctx (Sigma x a b) =
-    do
-        check ctx a VU
-        check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
-        return VU
-synth ctx (Car e) =
-    do
-        t <- synth ctx e
-        (aT, _) <- isSigma ctx t
-        return aT
-synth ctx (Cdr e) =
-    do
-        t <- synth ctx e
-        (_, dT) <- isSigma ctx t
-        return (evalClosure dT (doCar (eval (mkEnv ctx) e)))
+synth ctx (Pi x a b) = do
+    check ctx a VU
+    check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
+    return VU
+synth ctx (App rator rand) = do
+    funTy <- synth ctx rator
+    (a, b) <- isPi ctx funTy
+    check ctx rand a
+    return (evalClosure b (eval (mkEnv ctx) rand))
+synth ctx (Sigma x a b) = do
+    check ctx a VU
+    check (extendCtx ctx x (eval (mkEnv ctx) a)) b VU
+    return VU
+synth ctx (Car e) = do
+    t <- synth ctx e
+    (aT, _) <- isSigma ctx t
+    return aT
+synth ctx (Cdr e) = do
+    t <- synth ctx e
+    (_, dT) <- isSigma ctx t
+    return (evalClosure dT (doCar (eval (mkEnv ctx) e)))
 synth _ Nat = return VU
-synth ctx (IndNat tgt mot base step) =
-    do
-        t <- synth ctx tgt
-        isNat ctx t
-        let tgtV = eval (mkEnv ctx) tgt
-            motTy = eval (Env []) (Pi (Name "x") Nat U)
-        check ctx mot motTy
-        let motV = eval (mkEnv ctx) mot
-        check ctx base (doApply motV VZero)
-        check ctx step (indNatStepType motV)
-        return (doApply motV tgtV)
-synth ctx (Equal ty from to) =
-    do
-        check ctx ty VU
-        let tyV = eval (mkEnv ctx) ty
-        check ctx from tyV
-        check ctx to tyV
-        return VU
-synth ctx (Replace tgt mot base) =
-    do
-        t <- synth ctx tgt
-        (ty, from, to) <- isEqual ctx t
-        let motTy = eval (Env [(Name "ty", ty)]) (Pi (Name "x") (Var (Name "ty")) U)
-        check ctx mot motTy
-        let motV = eval (mkEnv ctx) mot
-        check ctx base (doApply motV from)
-        return (doApply motV to)
+synth ctx (IndNat tgt mot base step) = do
+    t <- synth ctx tgt
+    isNat ctx t
+    let tgtV = eval (mkEnv ctx) tgt
+        motTy = eval (Env []) (Pi (Name "x") Nat U)
+    check ctx mot motTy
+    let motV = eval (mkEnv ctx) mot
+    check ctx base (doApply motV VZero)
+    check ctx step (indNatStepType motV)
+    return (doApply motV tgtV)
+synth ctx (Equal ty from to) = do
+    check ctx ty VU
+    let tyV = eval (mkEnv ctx) ty
+    check ctx from tyV
+    check ctx to tyV
+    return VU
+synth ctx (Replace tgt mot base) = do
+    t <- synth ctx tgt
+    (ty, from, to) <- isEqual ctx t
+    let motTy = eval (Env [(Name "ty", ty)]) (Pi (Name "x") (Var (Name "ty")) U)
+    check ctx mot motTy
+    let motV = eval (mkEnv ctx) mot
+    check ctx base (doApply motV from)
+    return (doApply motV to)
 synth _ Trivial = return VU
 synth _ Absurd = return VU
-synth ctx (IndAbsurd tgt mot) =
-    do
-        t <- synth ctx tgt
-        isAbsurd ctx t
-        check ctx mot VU
-        return (eval (mkEnv ctx) mot)
+synth ctx (IndAbsurd tgt mot) = do
+    t <- synth ctx tgt
+    isAbsurd ctx t
+    check ctx mot VU
+    return (eval (mkEnv ctx) mot)
 synth _ Atom = return VU
 synth _ U = return VU
-synth ctx (The ty expr) =
-    do
-        check ctx ty VU
-        let tyV = eval (mkEnv ctx) ty
-        check ctx expr tyV
-        return tyV
+synth ctx (The ty expr) = do
+    check ctx ty VU
+    let tyV = eval (mkEnv ctx) ty
+    check ctx expr tyV
+    return tyV
+--  Γ ⊢ A ⇐ U   Γ ⊢ B ⇐ U
+-- ------------------------
+--   Γ ⊢ (Either A B) ⇒ U
+synth ctx (Either a b) = do
+    check ctx a VU
+    check ctx b VU
+    return VU
+--    Γ ⊢ tgt ⇒ (Either A B)
+--    Γ ⊢ mot ⇐ (Π ((e (Either A B))) U)
+--    Γ ⊢ ell ⇐ (Π ((a A)) (mot (left a)))
+--    Γ ⊢ are ⇐ (Π ((b B)) (mot (right b)))
+--  ----------------------------------------------
+--   Γ ⊢ (ind-Either tgt mot ell are) ⇒ (mot tgt)
+synth ctx (IndEither tgt mot ell are) = do
+    tyTgt <- synth ctx tgt
+    (tyA, tyB) <- isEither ctx tyTgt
+    let motTy = eval (Env [(Name "ty", tyTgt)]) (Pi (Name "e") (Var (Name "ty")) U)
+        ellTy = eval (Env [(Name "A", tyA)]) (Pi (Name "a") (Var (Name "A")) (App mot (Lft (Var (Name "a")))))
+        areTy = eval (Env [(Name "B", tyB)]) (Pi (Name "b") (Var (Name "B")) (App mot (Rght (Var (Name "b")))))
+    check ctx mot motTy
+    check ctx ell ellTy
+    check ctx are areTy
+    let motV = eval (mkEnv ctx) mot
+        tgtV = eval (mkEnv ctx) tgt
+    return (doApply motV tgtV)
 synth _ other =
     failure ("Unable to synthesize a type for " ++ show other)
 
 check :: Ctx -> Expr -> Ty -> Either Message ()
-check ctx (Lambda x body) t =
-    do
-        (a, b) <- isPi ctx t
-        let xV = evalClosure b (VNeutral a (NVar x))
-        check (extendCtx ctx x a) body xV
-check ctx (Cons a d) t =
-    do
-        (aT, dT) <- isSigma ctx t
-        check ctx a aT
-        let aV = eval (mkEnv ctx) a
-        check ctx d (evalClosure dT aV)
-check ctx Zero t =
+check ctx (Lambda x body) t = do
+    (a, b) <- isPi ctx t
+    let xV = evalClosure b (VNeutral a (NVar x))
+    check (extendCtx ctx x a) body xV
+check ctx (Cons a d) t = do
+    (aT, dT) <- isSigma ctx t
+    check ctx a aT
+    let aV = eval (mkEnv ctx) a
+    check ctx d (evalClosure dT aV)
+check ctx Zero t = isNat ctx t
+check ctx (Add1 n) t = do
     isNat ctx t
-check ctx (Add1 n) t =
-    do
-        isNat ctx t
-        check ctx n VNat
-check ctx Same t =
-    do
-        (t, from, to) <- isEqual ctx t
-        convert ctx t from to
-check ctx Sole t =
-    isTrivial ctx t
-check ctx (Tick _) t =
-    isAtom ctx t
-check ctx other t =
-    do
-        t' <- synth ctx other
-        convert ctx VU t' t
+    check ctx n VNat
+check ctx Same t = do
+    (t, from, to) <- isEqual ctx t
+    convert ctx t from to
+check ctx Sole t = isTrivial ctx t
+check ctx (Tick _) t = isAtom ctx t
+--          Γ ⊢ e ⇐ A
+-- -----------------------------
+--  Γ ⊢ (left e) ⇐ (Either A B)
+check ctx (Lft e) t = do
+    (tyA, _) <- isEither ctx t
+    check ctx e tyA
+--           Γ ⊢ e ⇐ B
+-- -----------------------------
+--  Γ ⊢ (right e) ⇐ (Either A B)
+check ctx (Rght e) t = do
+    (_, tyB) <- isEither ctx t
+    check ctx e tyB
+check ctx other t = do
+    t' <- synth ctx other
+    convert ctx VU t' t
 
 convert :: Ctx -> Ty -> Value -> Value -> Either Message ()
 convert ctx t v1 v2 =
@@ -638,6 +669,10 @@ isAtom :: Ctx -> Value -> Either Message ()
 isAtom _ VAtom = return ()
 isAtom ctx other = unexpected ctx "Not Atom" other
 
+isEither :: Ctx -> Value -> Either Message (Ty, Ty)
+isEither _ (VEither tyA tyB) = return (tyA, tyB)
+isEither ctx other = unexpected ctx "Not Either" other
+
 data Toplevel = Define Name Expr | Example Expr
 
 newtype Output = ExampleOutput Expr
@@ -678,41 +713,88 @@ testfile decls =
 
 evenOddProgram :: [Toplevel]
 evenOddProgram =
-  [ Define (Name "double")
-     (The (Pi (Name "x") Nat Nat)
-       (Lambda (Name "x")
-         (IndNat (Var (Name "x")) (Lambda (Name "_") Nat)
-           Zero
-           (Lambda (Name "_") (Lambda (Name "dbl") (Add1 (Add1 (Var (Name "dbl")))))))))
-  , Example (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero))))
-  , Define (Name "cong")
-      (The
-        (Pi (Name "A") U
-         (Pi (Name "B") U
-          (Pi (Name "from") (Var (Name "A"))
-           (Pi (Name "to") (Var (Name "A"))
-            (Pi (Name "eq") (Equal (Var (Name "A")) (Var (Name "from")) (Var (Name "to")))
-             (Pi (Name "f") (Pi (Name "x") (Var (Name "A")) (Var (Name "B")))
-              (Equal (Var (Name "B"))
-                     (App (Var (Name "f")) (Var (Name "from")))
-                     (App (Var (Name "f")) (Var (Name "to"))))))))))
-        (Lambda (Name "A")
-         (Lambda (Name "B")
-          (Lambda (Name "from")
-           (Lambda (Name "to")
-            (Lambda (Name "eq")
-             (Lambda (Name "f")
-              (Replace (Var (Name "eq"))
-                       (Lambda (Name "where")
-                        (Equal (Var (Name "B"))
-                               (App (Var (Name "f")) (Var (Name "from")))
-                               (App (Var (Name "f")) (Var (Name "where")))))
-                       Same))))))))
-
-  -- You can use these examples to check whether your proof that all
-  -- numbers are even or odd returns the expected results.
-  -- , Example (App (Var (Name "even-or-odd")) (Add1 (Add1 (Add1 Zero))))
-  -- , Example (App (Var (Name "even-or-odd")) (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero)))))
-  ]
+    [ Define
+        (Name "double")
+        ( The
+            (Pi (Name "x") Nat Nat)
+            ( Lambda
+                (Name "x")
+                ( IndNat
+                    (Var (Name "x"))
+                    (Lambda (Name "_") Nat)
+                    Zero
+                    (Lambda (Name "_") (Lambda (Name "dbl") (Add1 (Add1 (Var (Name "dbl"))))))
+                )
+            )
+        )
+    , Example (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero))))
+    , Define
+        (Name "cong")
+        ( The
+            ( Pi
+                (Name "A")
+                U
+                ( Pi
+                    (Name "B")
+                    U
+                    ( Pi
+                        (Name "from")
+                        (Var (Name "A"))
+                        ( Pi
+                            (Name "to")
+                            (Var (Name "A"))
+                            ( Pi
+                                (Name "eq")
+                                (Equal (Var (Name "A")) (Var (Name "from")) (Var (Name "to")))
+                                ( Pi
+                                    (Name "f")
+                                    (Pi (Name "x") (Var (Name "A")) (Var (Name "B")))
+                                    ( Equal
+                                        (Var (Name "B"))
+                                        (App (Var (Name "f")) (Var (Name "from")))
+                                        (App (Var (Name "f")) (Var (Name "to")))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+            ( Lambda
+                (Name "A")
+                ( Lambda
+                    (Name "B")
+                    ( Lambda
+                        (Name "from")
+                        ( Lambda
+                            (Name "to")
+                            ( Lambda
+                                (Name "eq")
+                                ( Lambda
+                                    (Name "f")
+                                    ( Replace
+                                        (Var (Name "eq"))
+                                        ( Lambda
+                                            (Name "where")
+                                            ( Equal
+                                                (Var (Name "B"))
+                                                (App (Var (Name "f")) (Var (Name "from")))
+                                                (App (Var (Name "f")) (Var (Name "where")))
+                                            )
+                                        )
+                                        Same
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        -- You can use these examples to check whether your proof that all
+        -- numbers are even or odd returns the expected results.
+        -- , Example (App (Var (Name "even-or-odd")) (Add1 (Add1 (Add1 Zero))))
+        -- , Example (App (Var (Name "even-or-odd")) (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero)))))
+    ]
 
 main = return ()
