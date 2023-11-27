@@ -729,6 +729,32 @@ evenOddProgram =
         )
     , Example (App (Var (Name "double")) (Add1 (Add1 (Add1 Zero))))
     , Define
+        (Name "Even")
+        (The
+            (Pi (Name "x") Nat U)
+            (Lambda
+                (Name "n")
+                (Sigma
+                    (Name "half") Nat
+                    (Equal
+                        Nat
+                        (Var (Name "n"))
+                        (App (Var (Name "double")) (Var (Name "half")))))))
+    , Example (App (Var (Name "Even")) Zero)
+    , Define
+        (Name "Odd")
+        (The
+            (Pi (Name "x") Nat U)
+            (Lambda
+                (Name "n")
+                (Sigma
+                    (Name "half") Nat
+                    (Equal
+                        Nat
+                        (Var (Name "n"))
+                        (Add1 (App (Var (Name "double")) (Var (Name "half"))))))))
+    , Example (App (Var (Name "Odd")) (Add1 Zero))
+    , Define
         (Name "cong")
         ( The
             ( Pi
@@ -791,6 +817,8 @@ evenOddProgram =
                 )
             )
         )
+
+
         -- You can use these examples to check whether your proof that all
         -- numbers are even or odd returns the expected results.
         -- , Example (App (Var (Name "even-or-odd")) (Add1 (Add1 (Add1 Zero))))
